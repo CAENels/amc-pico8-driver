@@ -47,6 +47,7 @@
 struct __attribute__((__packed__)) trg_ctrl {
 	float limit;
 	uint32_t nr_samp;
+	uint32_t ch_sel;
 	enum {DISABLED, POS_EDGE, NEG_EDGE, BOTH_EDGE} mode;
 };
 

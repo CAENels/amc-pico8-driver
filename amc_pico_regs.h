@@ -50,6 +50,8 @@
 #define TRG_OFFS_LIMIT		(0x14)
 #define TRG_OFFS_NRSAMP		(0x18)
 
+#define TRG_CTRL_CH_SHIFT	(8)
+
 /* */
 #define MUX_TRG_MASK		(0x7)
 #define MUX_TRG_SHIFT		(0)

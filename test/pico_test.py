@@ -73,7 +73,7 @@ class PicoTest(object):
             print('get_b_trans():', str(b_trans))
         return b_trans
 
-    def set_trigger(self, limit, nr_samp=1000, mode='POS EDGE'):
+    def set_trigger(self, limit, ch_sel, nr_samp=1000, mode='POS EDGE'):
         ''' Sets trigger control '''
         if self.debug:
             print('set_trigger(', str(limit), ',', str(nr_samp), ',', str(mode), ')')
@@ -82,6 +82,7 @@ class PicoTest(object):
         buf = bytes()
         buf += struct.pack('f', limit)
         buf += struct.pack('I', nr_samp)
+        buf += struct.pack('I', ch_sel)
         if isinstance(mode, int):
             buf += struct.pack('I', mode)
         else:
@@ -141,8 +142,8 @@ def main():
 
     pico_test.get_b_trans()
 
-    pico_test.set_trigger(limit=10e-6, nr_samp=2000, mode='POS EDGE')
-    pico_test.set_ring_buf(1000)
+    pico_test.set_trigger(limit=5e-8, ch_sel=0, nr_samp=2000, mode='POS EDGE')
+    pico_test.set_ring_buf(100)
 
     pico_test.set_conv_mux(0)
     pico_test.set_gate_mux(0)

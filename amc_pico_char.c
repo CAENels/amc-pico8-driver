@@ -150,10 +150,11 @@ long char_ioctl(
 		copy_from_user((void *)&trg, (void *)arg,
 			sizeof(struct trg_ctrl));
 
-		debug_print(DEBUG_FULL, "trg.limit: %08x\n",
+		debug_print(DEBUG_FULL, "    trg.limit: %08x\n",
 			*(uint32_t *)&trg.limit);
-		debug_print(DEBUG_FULL, "trg.nrsamp: %d\n", trg.nr_samp);
-		debug_print(DEBUG_FULL, "trg.mode: %s\n",
+		debug_print(DEBUG_FULL, "    trg.nrsamp: %d\n", trg.nr_samp);
+		debug_print(DEBUG_FULL, "    trg.ch_sel: %d\n", trg.ch_sel);
+		debug_print(DEBUG_FULL, "    trg.mode: %s\n",
 			(trg.mode == DISABLED ? "DISABLED" :
 			trg.mode == POS_EDGE ?  "POS_EDGE" :
 			trg.mode == NEG_EDGE ?  "NEG_EDGE" : "BOTH_EDGE"));
@@ -164,8 +165,18 @@ long char_ioctl(
 			board->bar[0] + PICO_ADDR + TRG_OFFS_NRSAMP);
 
 		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
-		iowrite32((ctrl_tmp & (~0x3)) | trg.mode,
-			board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
+
+		/* change the trigger edge */
+		ctrl_tmp &= ~(0x3);
+		ctrl_tmp |= trg.mode;
+
+		/* change the channel bits */
+		ctrl_tmp &= ~(0x7 << TRG_CTRL_CH_SHIFT);
+		ctrl_tmp |= trg.ch_sel << TRG_CTRL_CH_SHIFT;
+
+		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
+		debug_print(DEBUG_CHAR, "   trigger control: %08x\n",
+			ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL));
 		break;
 
 	/* ================================================================== */
