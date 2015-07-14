@@ -191,7 +191,7 @@ long char_ioctl(
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
 
-		debug_print(DEBUG_FULL, "cont_trg reg: %d\n",
+		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
 			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
 		break;
 
@@ -209,7 +209,7 @@ long char_ioctl(
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
 
-		debug_print(DEBUG_FULL, "cont_trg reg: %d\n",
+		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
 			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
 		break;
 
