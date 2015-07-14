@@ -19,3 +19,7 @@ debug:
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
+
+install:
+	echo "KERNEL==\"amc_pico\", MODE=\"0666\"\n" | sudo tee /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
+	sudo udevadm control --reload-rules
