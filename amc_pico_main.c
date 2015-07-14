@@ -349,7 +349,8 @@ static int __init damc_fmc25_pcie_init(void)
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: GET_B_TRANS = %08lx\n", GET_B_TRANS);
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_TRG   = %08lx\n", SET_TRG);
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_RING_BUF = %08lx\n", SET_RING_BUF);
-
+	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_GATE_MUX = %08lx\n", SET_GATE_MUX);
+	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_CONV_MUX = %08lx\n", SET_CONV_MUX);
 
 	rc = pci_register_driver(&pci_driver);
 	return rc;

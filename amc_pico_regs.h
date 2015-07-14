@@ -44,11 +44,17 @@
 
 
 /* on PICO_ADDR */
+#define PICO_CONV_TRG		(0x4)
 #define RING_BUFF_OFFS_DELAY	(0xC)
 #define TRG_OFFS_CTRL		(0x10)
 #define TRG_OFFS_LIMIT		(0x14)
 #define TRG_OFFS_NRSAMP		(0x18)
 
+/* */
+#define MUX_TRG_MASK		(0x7)
+#define MUX_TRG_SHIFT		(0)
+#define MUX_CONV_MASK		(0x7)
+#define MUX_CONV_SHIFT		(8)
 
 /* DMA register masks */
 #define DMA_CTRL_MASK_ENABLE	(0x00000100)

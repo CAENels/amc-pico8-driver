@@ -74,5 +74,11 @@ struct __attribute__((__packed__)) trg_ctrl {
 /** Sets ring buffer (pre-trigger storage) parameters */
 #define SET_RING_BUF	_IOW(AMC_PICO_MAGIC, 60,  uint32_t*)
 
+/** Sets gate mux */
+#define SET_GATE_MUX	_IOW(AMC_PICO_MAGIC, 70,  uint32_t*)
+
+/** Sets convert signal mux */
+#define SET_CONV_MUX	_IOW(AMC_PICO_MAGIC, 70,  uint32_t*)
+
 
 #endif /* AMC_PICO_H_ */

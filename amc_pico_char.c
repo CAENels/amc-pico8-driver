@@ -178,6 +178,42 @@ long char_ioctl(
 		break;
 
 	/* ================================================================== */
+	case SET_GATE_MUX:
+		copy_from_user((void *)&control, (void *)arg, sizeof(uint32_t));
+		debug_print(DEBUG_FULL, "set gate mux: %d\n", control);
+
+		control &= MUX_TRG_MASK;
+		control <<= MUX_TRG_SHIFT;
+
+		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		ctrl_tmp &= ~(MUX_TRG_MASK << MUX_TRG_SHIFT);
+		ctrl_tmp |= control;
+
+		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+
+		debug_print(DEBUG_FULL, "cont_trg reg: %d\n",
+			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
+		break;
+
+	/* ================================================================== */
+	case SET_CONV_MUX:
+		copy_from_user((void *)&control, (void *)arg, sizeof(uint32_t));
+		debug_print(DEBUG_FULL, "set conv mux: %d\n", control);
+
+		control &= MUX_CONV_MASK;
+		control <<= MUX_CONV_SHIFT;
+
+		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		ctrl_tmp &= ~(MUX_TRG_MASK << MUX_TRG_SHIFT);
+		ctrl_tmp |= control;
+
+		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+
+		debug_print(DEBUG_FULL, "cont_trg reg: %d\n",
+			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
+		break;
+
+	/* ================================================================== */
 	default:
 		printk(KERN_ERR MOD_NAME ": unknown ioctl cmd: %08x\n", cmd);
 		break;
