@@ -18,6 +18,8 @@ class PicoTest(object):
     GET_B_TRANS = 0x80085028
     SET_TRG = 0x40085032
     SET_RING_BUF = 0x4008503c
+    SET_GATE_MUX = 0x40085046
+    SET_CONV_MUX = 0x40085050
 
     def __init__(self, filename, debug=True):
         super(PicoTest, self).__init__()
@@ -95,6 +97,22 @@ class PicoTest(object):
         buf = struct.pack('I', nr_samp)
         fcntl.ioctl(self.f.fileno(), self.SET_RING_BUF, buf)
 
+    def set_gate_mux(self, sel):
+        ''' Sets gate mux '''
+        if self.debug:
+            print('set_gate_mux(', str(sel), ')')
+
+        buf = struct.pack('I', sel)
+        fcntl.ioctl(self.f.fileno(), self.SET_GATE_MUX, buf)
+
+    def set_conv_mux(self, sel):
+        ''' Sets convert mux '''
+        if self.debug:
+            print('set_conv_mux(', str(sel), ')')
+
+        buf = struct.pack('I', sel)
+        fcntl.ioctl(self.f.fileno(), self.SET_CONV_MUX, buf)
+
     def read(self, nr_samp, print_data=True):
         ''' Reads picoammeter data'''
         if self.debug:
@@ -126,9 +144,15 @@ def main():
     pico_test.set_trigger(limit=10e-6, nr_samp=2000, mode='POS EDGE')
     pico_test.set_ring_buf(1000)
 
+    pico_test.set_conv_mux(0)
+    pico_test.set_gate_mux(0)
+
     pico_test.read(1)
     pico_test.read(10)
     pico_test.read(100000)
+
+    pico_test.set_conv_mux(0)
+    [pico_test.set_gate_mux(i) for i in range(8)]
 
 if __name__ == '__main__':
     main()
