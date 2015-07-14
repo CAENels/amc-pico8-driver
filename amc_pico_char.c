@@ -204,7 +204,7 @@ long char_ioctl(
 		control <<= MUX_CONV_SHIFT;
 
 		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
-		ctrl_tmp &= ~(MUX_TRG_MASK << MUX_TRG_SHIFT);
+		ctrl_tmp &= ~(MUX_CONV_MASK << MUX_CONV_SHIFT);
 		ctrl_tmp |= control;
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
