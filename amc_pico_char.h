@@ -31,6 +31,8 @@
 #include <linux/cdev.h>
 #include <linux/pci.h>
 #include <linux/sched.h>
+#include <linux/fs.h>
+#include <asm/uaccess.h>
 
 #include "amc_pico_internal.h"
 #include "amc_pico_regs.h"
