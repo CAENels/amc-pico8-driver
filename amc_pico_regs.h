@@ -49,6 +49,8 @@
 #define TRG_OFFS_CTRL		(0x10)
 #define TRG_OFFS_LIMIT		(0x14)
 #define TRG_OFFS_NRSAMP		(0x18)
+#define FPGA_VER_OFFSET		(0x78)
+#define FPGA_TS_OFFSET		(0x7C)
 
 #define TRG_CTRL_CH_SHIFT	(8)
 

@@ -250,6 +250,12 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	cdev = device_create(board->damc_fmc25_class, NULL, board->cdevno,
 		NULL, MOD_NAME);
 
+	/* output version and timestamp */
+	printk(KERN_DEBUG MOD_NAME ": FPGA HW version = %08x\n",
+		ioread32(board->bar[0] + PICO_ADDR + FPGA_VER_OFFSET));
+	printk(KERN_DEBUG MOD_NAME ": FPGA HW timestamp = %d\n",
+		ioread32(board->bar[0] + PICO_ADDR + FPGA_TS_OFFSET));
+
 	/* perform build in self test (DMA transfer) */
 	BIST(dev);
 
