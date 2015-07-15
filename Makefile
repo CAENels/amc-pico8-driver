@@ -21,5 +21,19 @@ clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
 
 install:
-	echo "KERNEL==\"amc_pico\", MODE=\"0666\"\n" | sudo tee /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
-	sudo udevadm control --reload-rules
+	echo "KERNEL==\"amc_pico*\", MODE=\"0666\"\n" > /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
+	udevadm control --reload-rules
+	cp amc_pico.ko /lib/modules/$(shell uname -r)/kernel/drivers/misc/
+	echo amc_pico >> /etc/modules
+	depmod -a
+	modprobe amc_pico
+	echo "Installation done"
+
+uninstall:
+	modprobe -r amc_pico
+	rm /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
+	udevadm control --reload-rules
+	rm /lib/modules/$(shell uname -r)/kernel/drivers/misc/amc_pico.ko
+	sed -i '/amc_pico/d' /etc/modules
+	depmod -a
+	echo "Driver uninstalled"
