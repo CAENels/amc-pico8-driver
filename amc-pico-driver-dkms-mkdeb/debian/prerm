@@ -5,9 +5,19 @@ VERSION=MODULE_VERSION
 
 set -e
 
+udev_rule_remove () {
+  rm -f /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
+}
+
+etc_modules_remove () {
+  sed -i '/amc_pico/d' /etc/modules
+}
+
 case "$1" in
     remove|upgrade|deconfigure)
       if [  "`dkms status -m $NAME`" ]; then
+         udev_rule_remove
+         etc_modules_remove
          dkms remove -m $NAME -v $VERSION --all
       fi
     ;;

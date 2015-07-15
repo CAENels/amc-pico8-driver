@@ -17,6 +17,10 @@ udev_rule_add () {
 	echo "KERNEL==\"amc_pico*\", MODE=\"0666\" "> /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
 }
 
+etc_modules_add () {
+	echo amc_pico >> /etc/modules
+}
+
 dkms_configure () {
 	for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/postinst"; do
 		if [ -f "$POSTINST" ]; then
@@ -35,6 +39,7 @@ dkms_configure () {
 case "$1" in
 	configure)
 		udev_rule_add
+		etc_modules_add
 		dkms_configure
 	;;
 
