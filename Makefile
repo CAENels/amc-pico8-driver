@@ -8,6 +8,7 @@ amc_pico-objs := 		\
 
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
+ccflags-y += -Wno-error=date-time
 
 all: default
 
