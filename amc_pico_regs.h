@@ -45,12 +45,16 @@
 
 /* on PICO_ADDR */
 #define PICO_CONV_TRG		(0x4)
+#define PICO_CONV_GEN		(0x8)
 #define RING_BUFF_OFFS_DELAY	(0xC)
 #define TRG_OFFS_CTRL		(0x10)
 #define TRG_OFFS_LIMIT		(0x14)
 #define TRG_OFFS_NRSAMP		(0x18)
 #define FPGA_VER_OFFSET		(0x78)
 #define FPGA_TS_OFFSET		(0x7C)
+
+#define PICO_CLK_FREQ		(300000000)
+#define PICO_CONV_MAX		(2048)
 
 #define TRG_CTRL_CH_SHIFT	(8)
 

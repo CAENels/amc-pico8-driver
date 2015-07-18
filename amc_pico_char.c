@@ -120,21 +120,26 @@ long char_ioctl(
 	case SET_FSAMP:
 		copy_from_user(&scaler, (void *)arg, 4);
 
-		/* TODO: check if the range is valid */
-
 		/* convert freq to scaler (340MHz is clk freq of FPGA) */
-		scaler = 340000000 / scaler;
+		scaler = PICO_CLK_FREQ / scaler - 1;
 		debug_print(DEBUG_CHAR, "clock scaler: %d\n", scaler);
 
-		iowrite32((scaler), board->bar[0] + 0x8);
+		if ((scaler == 0) || scaler > PICO_CONV_MAX){
+			printk(KERN_DEBUG MOD_NAME
+				": prescaler out of range (%d > %d)\n",
+				scaler, PICO_CONV_MAX);
+			return -1;
+		}
+
+		iowrite32((scaler), board->bar[0] + PICO_CONV_GEN);
 		debug_print(DEBUG_CHAR, "   scaler readback: %08x\n",
-			ioread32(board->bar[0] + 0x8));
+			ioread32(board->bar[0] + PICO_CONV_GEN));
 		break;
 
 	/* ================================================================== */
 	case GET_FSAMP:
-		scaler = ioread32(board->bar[0] + 0x8);
-		scaler = 340000000 / scaler;
+		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
+		scaler = PICO_CLK_FREQ / scaler;
 		debug_print(DEBUG_CHAR, "   freq: %d", scaler);
 		copy_to_user((void *)arg, &scaler, 4);
 		break;
