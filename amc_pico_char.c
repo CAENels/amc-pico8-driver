@@ -129,6 +129,8 @@ long char_ioctl(
 			printk(KERN_DEBUG MOD_NAME
 				": prescaler out of range (%d > %d)\n",
 				scaler, PICO_CONV_MAX);
+
+			mutex_unlock(&board->mutex);
 			return -1;
 		}
 
