@@ -59,12 +59,13 @@
  * \param board    amc_pico board_data
  * \param address  bus address (=physical addr on x86) of the memory buffer
  * \param length   length in bytes
+ * \param gen_irq  selects if the transfer generates interrupt
  *
  * Pushes a new command (address, length and flag to generate irq when done)
  * to DMA FIFO.
  */
 
-void dma_push(struct board_data *board, uint32_t address, uint32_t length);
+void dma_push(struct board_data *board, uint32_t address, uint32_t length, int gen_irq);
 
 /**
  * \brief Enables or pauses DMA engine

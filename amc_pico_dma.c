@@ -20,8 +20,7 @@
 
  #include "amc_pico_dma.h"
 
-
-void dma_push(struct board_data *dev, uint32_t address, uint32_t length)
+void dma_push(struct board_data *dev, uint32_t address, uint32_t length, int gen_irq)
 {
 	iowrite32(address, dev->bar[0] + DMA_ADDR + DMA_OFFSET_ADDR);
 	debug_print(DEBUG_DMA,  "   dma_start(): DMA address readback: %08x\n",
@@ -34,7 +33,7 @@ void dma_push(struct board_data *dev, uint32_t address, uint32_t length)
 	/* make sure that address and length have been written */
 	mb();
 	debug_print(DEBUG_DMA,  "   dma_start(): DMA command go!\n");
-	iowrite32(DMA_CMD_MASK_DMA_GO | DMA_CMD_MASK_GEN_IRQ,
+	iowrite32(DMA_CMD_MASK_DMA_GO  | (gen_irq ? DMA_CMD_MASK_GEN_IRQ : 0 ),
 		dev->bar[0] + DMA_ADDR + DMA_OFFSET_CMD);
 }
 

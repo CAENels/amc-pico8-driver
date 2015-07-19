@@ -51,8 +51,9 @@ ssize_t char_read(
 	debug_print(DEBUG_CHAR, "  read()\n");
 
 	/* start dma transfer */
+	dma_enable(board, 0);
+	dma_push(board, (uint32_t)board->dma_buf[0], count, 1);
 	dma_enable(board, 1);
-	dma_push(board, (uint32_t)board->dma_buf[0], count);
 
 	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
 		msecs_to_jiffies(500));

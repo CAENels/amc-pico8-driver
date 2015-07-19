@@ -53,7 +53,7 @@ int BIST(struct pci_dev *dev)
 	irq_flag = 0;
 	t0 = ktime_get();
 	dma_enable(board, 0);
-	dma_push(board, tmp_buf_dma, buf_size);
+	dma_push(board, tmp_buf_dma, buf_size, 1);
 	dma_enable(board, 1);
 	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
 		msecs_to_jiffies(1000));
