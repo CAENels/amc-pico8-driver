@@ -58,11 +58,12 @@ ssize_t char_read(
 	i = 0;
 	tmp_count = count;
 	dma_enable(board, 0);
-	while(tmp_count > DMA_BUF_SIZE){
+	while (tmp_count > DMA_BUF_SIZE) {
 		dma_push(board, (uint32_t)board->dma_buf[i++], DMA_BUF_SIZE, 0);
 		tmp_count -= DMA_BUF_SIZE;
 	}
 	dma_push(board, (uint32_t)board->dma_buf[i], tmp_count, 1);
+	mb();
 	dma_enable(board, 1);
 
 	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
@@ -77,7 +78,16 @@ ssize_t char_read(
 		count = 0;
 	} else {
 		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
-		copy_to_user(buf, board->kernel_mem_buf[0], count);
+		i = 0;
+		tmp_count = count;
+		while (tmp_count > DMA_BUF_SIZE) {
+			copy_to_user(buf + DMA_BUF_SIZE*i,
+				board->kernel_mem_buf[i], DMA_BUF_SIZE);
+			i++;
+			tmp_count -= DMA_BUF_SIZE;
+		}
+		copy_to_user(buf + DMA_BUF_SIZE*i,
+			board->kernel_mem_buf[i], tmp_count);
 	}
 
 	*pos += count;
