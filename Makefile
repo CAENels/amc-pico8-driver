@@ -8,7 +8,9 @@ amc_pico-objs := 		\
 
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
-ccflags-y += -Wno-error=date-time
+ccflags-y += $(shell \
+	if [ $(cc-version) -ge 0409 ] ; then \
+	echo "-Wno-error=date-time"; fi ;)
 
 all: default
 
