@@ -43,20 +43,30 @@ ssize_t char_read(
 {
 	struct board_data *board;
 	int rc;
+	size_t tmp_count;
+	int i;
 
 	board = (struct board_data *) filp->private_data;
 
 	mutex_lock(&board->mutex);
 
-	debug_print(DEBUG_CHAR, "  read()\n");
+	debug_print(DEBUG_CHAR, "  read(), count %ld\n", count);
+
+	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -1;
 
 	/* start dma transfer */
+	i = 0;
+	tmp_count = count;
 	dma_enable(board, 0);
-	dma_push(board, (uint32_t)board->dma_buf[0], count, 1);
+	while(tmp_count > DMA_BUF_SIZE){
+		dma_push(board, (uint32_t)board->dma_buf[i++], DMA_BUF_SIZE, 0);
+		tmp_count -= DMA_BUF_SIZE;
+	}
+	dma_push(board, (uint32_t)board->dma_buf[i], tmp_count, 1);
 	dma_enable(board, 1);
 
 	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
-		msecs_to_jiffies(500));
+		msecs_to_jiffies(500*(i+1)));
 	irq_flag = 0;
 
 	if (rc == 0) {
