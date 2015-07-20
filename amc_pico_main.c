@@ -51,11 +51,10 @@
 #include "amc_pico_bist.h"
 
 
-int version[3] = {1, 0, 0};
+int version[3] = {1, 0, 1};
 uint32_t bytes_trans;
 DECLARE_WAIT_QUEUE_HEAD(queue);
 int irq_flag;
-
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
@@ -139,6 +138,18 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	struct device *cdev;
 
 	printk(KERN_DEBUG MOD_NAME " probe()\n");
+	printk(KERN_DEBUG MOD_NAME " subvendor id: %04x\n",
+		dev->subsystem_vendor);
+	printk(KERN_DEBUG MOD_NAME " subdevice id: %04x\n",
+		dev->subsystem_device);
+
+	if( (dev->subsystem_vendor != AMC_PICO_SUBVENDOR_ID)
+			&& (dev->subsystem_device != AMC_PICO_SUBDEVICE_ID)){
+		printk(KERN_DEBUG MOD_NAME " This device is not AMC-Pico8\n");
+		printk(KERN_DEBUG MOD_NAME " we will not claim it.\n");
+		return -1;
+	}
+
 
 	/* Allocate memory for board structure */
 	board = kzalloc(sizeof(struct board_data), GFP_KERNEL);

@@ -27,6 +27,9 @@
 #define AMC_PICO_REGS_H_
 
 
+#define AMC_PICO_SUBVENDOR_ID	(0xCAE2)
+#define AMC_PICO_SUBDEVICE_ID	(0x71C0)
+
 /* module adresses */
 #define PICO_ADDR	(0x0)
 #define DMA_ADDR	(0x10000)
