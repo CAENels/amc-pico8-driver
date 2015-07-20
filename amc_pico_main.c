@@ -88,6 +88,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	}
 
 	/* mb(); */
+	bytes_trans = 0;
 
 	do {
 		count = ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS);
@@ -104,7 +105,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 			break;
 		}
 
-		bytes_trans = ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+		bytes_trans += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		debug_print(DEBUG_IRQ, "   ISR: resp count: %08x\n", count);
 		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", bytes_trans);
 		debug_print(DEBUG_IRQ, "   ISR: resp addr: %08x\n",
