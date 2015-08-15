@@ -51,7 +51,7 @@
 #include "amc_pico_bist.h"
 
 
-int version[3] = {1, 0, 1};
+int version[3] = {1, 0, 6};
 uint32_t bytes_trans;
 DECLARE_WAIT_QUEUE_HEAD(queue);
 int irq_flag;
