@@ -169,7 +169,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	rc = pci_enable_device(dev);
 	if (rc) {
 		printk(KERN_DEBUG MOD_NAME ": pci_enable_device() failed\n");
-		return rc;
+		goto probe_free_board;
 	}
 
 	/* Enable bus mastering on device */
@@ -194,7 +194,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
 		       irq_line, rc);
 		board->irq_line = -1;
-		return -1;
+		goto probe_disable_dev;
 	}
 
 	board->irq_line = irq_line;
@@ -218,18 +218,26 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
+	/* check if we got BAR0 (all FPGA logic is there) */
+	if (!board->bar[0]) {
+		printk(KERN_DEBUG MOD_NAME ": BAR0 not available, exiting\n");
+		goto probe_unmap_bars;
+	}
+
 	/* Our DMA supports only 32-bit addressing */
-	if (pci_set_dma_mask(dev, DMA_BIT_MASK(32)) < 0) {
+	rc = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
+	if (rc < 0) {
 		printk(KERN_DEBUG MOD_NAME
 			": Problem setting DMA mask\n");
+		goto probe_unmap_bars;
 	}
 
-	if (pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32)) < 0) {
+	rc = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
+	if (rc < 0) {
 		printk(KERN_DEBUG MOD_NAME
 			": Problem setting consistent DMA mask\n");
+		goto probe_unmap_bars;
 	}
-
-
 
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		board->kernel_mem_buf[i] =
@@ -238,8 +246,13 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 			board->kernel_mem_buf[i]);
 		debug_print(DEBUG_SYS, "\tsize: %d, bus_addr: 0x%08llx\n",
 			DMA_BUF_SIZE, board->dma_buf[i]);
-	}
 
+		if (!board->dma_buf[i]) {
+			printk(KERN_DEBUG MOD_NAME
+				": Problem allocating buffer %d, exiting\n", i);
+			goto probe_free_bufs;
+		}
+	}
 
 	/* Create master class */
 	board->damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
@@ -251,8 +264,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* check if allocation failed */
 	if (rc < 0) {
-		printk(KERN_ERR "FAIL: alloc_chrdev_region() = %d\n", rc);
-		return -1;
+		printk(KERN_ERR MOD_NAME ": alloc_chrdev_region() = %d\n", rc);
+		goto probe_free_bufs;
 	}
 
 	/* Add file_opperations structure to device */
@@ -262,9 +275,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Add char device */
 	rc = cdev_add(&board->cdev, board->cdevno, 1);
 	if (rc < 0) {
-		printk(KERN_ERR "FAIL: cdev_add() = %d\n", rc);
-		unregister_chrdev_region(board->cdevno, 1);
-		return -1;
+		printk(KERN_ERR MOD_NAME ": cdev_add() = %d\n", rc);
+		goto probe_ureg_chrdev;
 	}
 
 	/* Create char device */
@@ -280,7 +292,41 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* perform build in self test (DMA transfer) */
 	BIST(dev);
 
+	/* probe was successful */
 	return 0;
+
+
+/* various exit paths when a fail occurs during probing */
+probe_ureg_chrdev:
+	unregister_chrdev_region(board->cdevno, 1);
+
+probe_free_bufs:
+	for (i = 0; i < DMA_BUF_COUNT; i++) {
+		if (board->kernel_mem_buf[i]) {
+			debug_print(DEBUG_SYS, "Freeing DMA buffer at: %p\n",
+				board->kernel_mem_buf[i]);
+
+			pci_free_consistent(	dev,
+						DMA_BUF_SIZE,
+						board->kernel_mem_buf[i],
+						board->dma_buf[i]);
+		}
+	}
+probe_unmap_bars:
+	for (i = 0; i < PCIE_NR_BARS; i++) {
+		if (board->bar[i]) {
+			pci_iounmap(dev, board->bar[i]);
+			board->bar[i] = NULL;
+		}
+	}
+
+probe_disable_dev:
+	pci_disable_device(dev);
+
+probe_free_board:
+	kfree(board);
+
+	return -1;
 }
 
 /**
