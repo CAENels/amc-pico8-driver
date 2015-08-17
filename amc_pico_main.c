@@ -51,7 +51,7 @@
 #include "amc_pico_bist.h"
 
 
-int version[3] = {1, 0, 6};
+int version[3] = {1, 0, 7};
 uint32_t bytes_trans;
 DECLARE_WAIT_QUEUE_HEAD(queue);
 int irq_flag;
@@ -218,10 +218,18 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
-	/* Buffer for DMA */
-	if (pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32))) {
-		printk(KERN_DEBUG MOD_NAME ": Problem setting DMA mask\n");
+	/* Our DMA supports only 32-bit addressing */
+	if (pci_set_dma_mask(dev, DMA_BIT_MASK(32)) < 0) {
+		printk(KERN_DEBUG MOD_NAME
+			": Problem setting DMA mask\n");
 	}
+
+	if (pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32)) < 0) {
+		printk(KERN_DEBUG MOD_NAME
+			": Problem setting consistent DMA mask\n");
+	}
+
+
 
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		board->kernel_mem_buf[i] =
@@ -231,6 +239,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		debug_print(DEBUG_SYS, "\tsize: %d, bus_addr: 0x%08llx\n",
 			DMA_BUF_SIZE, board->dma_buf[i]);
 	}
+
 
 	/* Create master class */
 	board->damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
@@ -330,6 +339,9 @@ static void remove(struct pci_dev *dev)
 
 	/* Disable device */
 	pci_disable_device(dev);
+
+	/* Free allocated memory */
+	kfree(board);
 }
 
 
