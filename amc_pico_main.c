@@ -321,6 +321,11 @@ probe_unmap_bars:
 	}
 
 probe_disable_dev:
+	free_irq(board->irq_line, (void *)board);
+	if (board->msi_enabled) {
+		pci_disable_msi(dev);
+		board->msi_enabled = 0;
+	}
 	pci_disable_device(dev);
 
 probe_free_board:
