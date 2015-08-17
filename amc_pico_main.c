@@ -342,6 +342,26 @@ static struct pci_driver pci_driver = {
 };
 
 
+void print_all_ioctls(void){
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_RANGE = 0x%08x\n", (unsigned int)SET_RANGE);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: GET_RANGE = 0x%08x\n", (unsigned int)GET_RANGE);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_FSAMP = 0x%08x\n", (unsigned int)SET_FSAMP);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: GET_FSAMP = 0x%08x\n", (unsigned int)GET_FSAMP);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: GET_B_TRANS = 0x%08x\n", (unsigned int)GET_B_TRANS);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_TRG   = 0x%08x\n", (unsigned int)SET_TRG);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_RING_BUF = 0x%08x\n", (unsigned int)SET_RING_BUF);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_GATE_MUX = 0x%08x\n", (unsigned int)SET_GATE_MUX);
+	printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_CONV_MUX = 0x%08x\n", (unsigned int)SET_CONV_MUX);
+}
 
 /**
  * \brief Registers driver to kernel
@@ -360,20 +380,7 @@ static int __init damc_fmc25_pcie_init(void)
 		__DATE__ " " __TIME__ "\n");
 	printk(KERN_DEBUG "===============================================\n");
 
-	printk(KERN_DEBUG "_IOC_NRBITS: %d\n", _IOC_NRBITS);
-	printk(KERN_DEBUG "_IOC_TYPEBITS: %d\n", _IOC_TYPEBITS);
-	printk(KERN_DEBUG "_IOC_SIZEBITS: %d\n", _IOC_SIZEBITS);
-	printk(KERN_DEBUG "_IOC_DIRBITS: %d\n", _IOC_DIRBITS);
-
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_RANGE = %08lx\n", SET_RANGE);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: GET_RANGE = %08lx\n", GET_RANGE);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_FSAMP = %08lx\n", SET_FSAMP);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: GET_FSAMP = %08lx\n", GET_FSAMP);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: GET_B_TRANS = %08lx\n", GET_B_TRANS);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_TRG   = %08lx\n", SET_TRG);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_RING_BUF = %08lx\n", SET_RING_BUF);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_GATE_MUX = %08lx\n", SET_GATE_MUX);
-	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_CONV_MUX = %08lx\n", SET_CONV_MUX);
+	print_all_ioctls();
 
 	rc = pci_register_driver(&pci_driver);
 	return rc;
