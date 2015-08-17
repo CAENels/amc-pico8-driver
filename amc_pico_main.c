@@ -360,6 +360,11 @@ static int __init damc_fmc25_pcie_init(void)
 		__DATE__ " " __TIME__ "\n");
 	printk(KERN_DEBUG "===============================================\n");
 
+	printk(KERN_DEBUG "_IOC_NRBITS: %d\n", _IOC_NRBITS);
+	printk(KERN_DEBUG "_IOC_TYPEBITS: %d\n", _IOC_TYPEBITS);
+	printk(KERN_DEBUG "_IOC_SIZEBITS: %d\n", _IOC_SIZEBITS);
+	printk(KERN_DEBUG "_IOC_DIRBITS: %d\n", _IOC_DIRBITS);
+
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_RANGE = %08lx\n", SET_RANGE);
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: GET_RANGE = %08lx\n", GET_RANGE);
 	printk(KERN_DEBUG MOD_NAME ": supported IOCTL: SET_FSAMP = %08lx\n", SET_FSAMP);
