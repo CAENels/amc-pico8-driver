@@ -6,7 +6,7 @@
 import fcntl
 import struct
 import numpy as np
-
+import os
 
 class PicoTest(object):
     """docstring for PicoTest"""
@@ -24,19 +24,19 @@ class PicoTest(object):
     def __init__(self, filename, debug=True):
         super(PicoTest, self).__init__()
         self.debug = debug
-        self.f = open(filename, 'rb')
+        self.f = os.open(filename, os.O_RDWR)
 
         if self.debug:
-            print('Opened', filename, 'with fileno', self.f.fileno())
+            print('Opened', filename, 'with fileno', self.f)
 
     def __del__(self):
-        self.f.close()
+        os.close(self.f)
         if self.debug:
-            print('Closed', self.f.name)
+            print('Closed', self.f)
 
     def get_range(self):
         ''' Gets picoammeter range '''
-        buf = fcntl.ioctl(self.f.fileno(), self.GET_RANGE, ' ')
+        buf = fcntl.ioctl(self.f, self.GET_RANGE, ' ')
         rng = struct.unpack('B', buf)[0]
         if self.debug:
             print('get_range():', '0b{0:08b}'.format(rng))
@@ -47,11 +47,11 @@ class PicoTest(object):
         if self.debug:
             print('set_range(', '0b{0:08b}'.format(rng), ')')
         buf = struct.pack('B', rng)
-        fcntl.ioctl(self.f.fileno(), self.SET_RANGE, buf)
+        fcntl.ioctl(self.f, self.SET_RANGE, buf)
 
     def get_fsamp(self):
         ''' Gets picoammeter sampling frequency '''
-        buf = fcntl.ioctl(self.f.fileno(), self.GET_FSAMP, '    ')
+        buf = fcntl.ioctl(self.f, self.GET_FSAMP, '    ')
         fsamp = struct.unpack('I', buf)[0]
         if self.debug:
             print('get_fsamp():', str(fsamp))
@@ -63,11 +63,11 @@ class PicoTest(object):
             print('set_fsamp(', str(fsamp), ')')
 
         buf = struct.pack('I', int(fsamp))
-        fcntl.ioctl(self.f.fileno(), self.SET_FSAMP, buf)
+        fcntl.ioctl(self.f, self.SET_FSAMP, buf)
 
     def get_b_trans(self):
         ''' Gets number of bytes transfered in previous read() '''
-        buf = fcntl.ioctl(self.f.fileno(), self.GET_B_TRANS, '    ')
+        buf = fcntl.ioctl(self.f, self.GET_B_TRANS, '    ')
         b_trans = struct.unpack('I', buf)[0]
         if self.debug:
             print('get_b_trans():', str(b_trans))
@@ -88,7 +88,7 @@ class PicoTest(object):
         else:
             buf += struct.pack('I', _MODE.index(mode))
 
-        fcntl.ioctl(self.f.fileno(), self.SET_TRG, buf)
+        fcntl.ioctl(self.f, self.SET_TRG, buf)
 
     def set_ring_buf(self, nr_samp):
         ''' Sets number of bytes in ring buffer (pre-trigger condition) '''
@@ -96,7 +96,7 @@ class PicoTest(object):
             print('set_ring_buf(', str(nr_samp), ')')
 
         buf = struct.pack('I', nr_samp)
-        fcntl.ioctl(self.f.fileno(), self.SET_RING_BUF, buf)
+        fcntl.ioctl(self.f, self.SET_RING_BUF, buf)
 
     def set_gate_mux(self, sel):
         ''' Sets gate mux '''
@@ -104,7 +104,7 @@ class PicoTest(object):
             print('set_gate_mux(', str(sel), ')')
 
         buf = struct.pack('I', sel)
-        fcntl.ioctl(self.f.fileno(), self.SET_GATE_MUX, buf)
+        fcntl.ioctl(self.f, self.SET_GATE_MUX, buf)
 
     def set_conv_mux(self, sel):
         ''' Sets convert mux '''
@@ -112,14 +112,14 @@ class PicoTest(object):
             print('set_conv_mux(', str(sel), ')')
 
         buf = struct.pack('I', sel)
-        fcntl.ioctl(self.f.fileno(), self.SET_CONV_MUX, buf)
+        fcntl.ioctl(self.f, self.SET_CONV_MUX, buf)
 
     def read(self, nr_samp, print_data=True):
         ''' Reads picoammeter data'''
         if self.debug:
             print('read(', str(nr_samp), ')')
 
-        buf = self.f.read(nr_samp*8*4)
+        buf = os.read(self.f, nr_samp*8*4)
         formatStr = '<' + 'f'*nr_samp*8
         chs = struct.unpack(formatStr, buf)
         chs = np.array(chs)
@@ -154,6 +154,17 @@ def main():
 
     pico_test.set_conv_mux(0)
     [pico_test.set_gate_mux(i) for i in range(8)]
+
+    # Clean-up
+    pico_test.set_conv_mux(0)
+    pico_test.set_gate_mux(0)
+    pico_test.set_trigger(limit=5e-8, ch_sel=0, nr_samp=2000, mode='DISABLED')
+    pico_test.set_fsamp(1e6)
+    pico_test.set_ring_buf(0)
+
+    print('***************************************')
+    print(' OK: AMC-Pico8 test succesfully passed ')
+    print('***************************************')
 
 if __name__ == '__main__':
     main()
