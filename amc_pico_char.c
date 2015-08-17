@@ -50,7 +50,7 @@ ssize_t char_read(
 
 	mutex_lock(&board->mutex);
 
-	debug_print(DEBUG_CHAR, "  read(), count %ld\n", count);
+	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
 
 	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -1;
 
