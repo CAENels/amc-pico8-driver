@@ -290,7 +290,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		ioread32(board->bar[0] + PICO_ADDR + FPGA_TS_OFFSET));
 
 	/* perform build in self test (DMA transfer) */
-	BIST(dev);
+	//BIST(dev);
 
 	/* probe was successful */
 	return 0;
