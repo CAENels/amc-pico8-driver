@@ -42,21 +42,21 @@ ssize_t char_read(
 )
 {
 	struct board_data *board;
-	int rc;
+	int rc, cond;
 	size_t tmp_count;
 	int i;
 
 	board = (struct board_data *) filp->private_data;
 
-	mutex_lock(&board->mutex);
-
 	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
+
+	spin_lock_irq(&board->spinner);
 
 	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
 	if(board->read_in_progress) {
+		spin_unlock_irq(&board->spinner);
 		debug_print(DEBUG_CHAR, "  read(), concurrent read()s not allowed\n");
-		mutex_unlock(&board->mutex);
 		return -EIO;
 	}
 	board->read_in_progress = 1;
@@ -73,38 +73,43 @@ ssize_t char_read(
 	mb();
 	dma_enable(board, 1);
 
-	mutex_unlock(&board->mutex);
+	rc = wait_event_interruptible_locked_irq(board->queue, board->irq_flag!=0);
 
-	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
-		msecs_to_jiffies(500*(i+1)));
-
-	mutex_lock(&board->mutex);
-	irq_flag = 0;
+	cond = board->irq_flag;
+	board->irq_flag = 0;
 	board->read_in_progress = 0;
 
-	if (rc == 0) {
-		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
+	if (rc != 0 || cond!=1) { /* interrupted or aborted */
+		if(cond!=1) rc = -ECANCELED;
 		/* reset DMA engine */
 		dma_reset(board);
-		bytes_trans = 0;
-		count = 0;
+		board->bytes_trans = 0;
+		spin_unlock_irq(&board->spinner);
+
+		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
+		return rc;
 	} else {
-		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
+		spin_unlock_irq(&board->spinner);
+
 		i = 0;
 		tmp_count = count;
-		while (tmp_count > DMA_BUF_SIZE) {
-			copy_to_user(buf + DMA_BUF_SIZE*i,
-				board->kernel_mem_buf[i], DMA_BUF_SIZE);
+		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
+		rc = 0;
+		while (tmp_count > DMA_BUF_SIZE && rc==0) {
+			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
+					board->kernel_mem_buf[i], DMA_BUF_SIZE);
 			i++;
 			tmp_count -= DMA_BUF_SIZE;
 		}
-		copy_to_user(buf + DMA_BUF_SIZE*i,
-			board->kernel_mem_buf[i], tmp_count);
+		if(rc==0)
+			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
+							board->kernel_mem_buf[i], tmp_count);
+
+		if(rc) return rc;
 	}
 
 	*pos += count;
 
-	mutex_unlock(&board->mutex);
 	return count;
 }
 
@@ -115,81 +120,44 @@ long char_ioctl(
 	unsigned long arg
 )
 {
+	long ret;
 	struct board_data *board;
 	struct trg_ctrl trg;
-	uint32_t control, scaler;
-	uint8_t range;
-	uint32_t rng_buf_delay;
+	uint32_t control = 0, scaler = 0;
+	uint8_t range = 0;
+	uint32_t rng_buf_delay = 0;
 	uint32_t ctrl_tmp;
 
 	debug_print(DEBUG_CHAR, "%s\n", __PRETTY_FUNCTION__);
 	debug_print(DEBUG_CHAR, "cmd: 0x%08x\n", cmd);
 
-	board = (struct board_data *) filp->private_data;
-
-	mutex_lock(&board->mutex);
-
+	/* validate cmd and copy in values from user before locking
+	 * can't access board->
+	 */
 	switch (cmd) {
-	/* ================================================================== */
 	case SET_RANGE:
-		copy_from_user(&range, (void *)arg, 1);
+		ret = get_user(range, (uint8_t*)arg);
 		range &= 0xFF;
 		debug_print(DEBUG_CHAR, "setting range: %01x\n", range);
-		control = (ioread32(board->bar[0]));
-		control &= ~0xFFUL; control |= range;
-		iowrite32(control, board->bar[0]);
-		debug_print(DEBUG_CHAR, "   control reg readback: %08x\n",
-			ioread32(board->bar[0]));
 		break;
-
-	/* ================================================================== */
-	case GET_RANGE:
-		range = (uint8_t)((ioread32(board->bar[0])) & 0xFF);
-		debug_print(DEBUG_CHAR, "   range: %x\n", range);
-		copy_to_user((void *)arg, &range, sizeof(uint8_t));
-		break;
-
-	/* ================================================================== */
 	case SET_FSAMP:
-		copy_from_user(&scaler, (void *)arg, 4);
+		ret = get_user(scaler, (uint32_t*)arg);
+		if(!ret) {
+			/* convert freq to scaler (340MHz is clk freq of FPGA) */
+			scaler = PICO_CLK_FREQ / scaler - 1;
+			debug_print(DEBUG_CHAR, "clock scaler: %d\n", scaler);
 
-		/* convert freq to scaler (340MHz is clk freq of FPGA) */
-		scaler = PICO_CLK_FREQ / scaler - 1;
-		debug_print(DEBUG_CHAR, "clock scaler: %d\n", scaler);
+			if ((scaler == 0) || scaler > PICO_CONV_MAX){
+				printk(KERN_DEBUG MOD_NAME
+					": prescaler out of range (%d > %d)\n",
+					scaler, PICO_CONV_MAX);
 
-		if ((scaler == 0) || scaler > PICO_CONV_MAX){
-			printk(KERN_DEBUG MOD_NAME
-				": prescaler out of range (%d > %d)\n",
-				scaler, PICO_CONV_MAX);
-
-			mutex_unlock(&board->mutex);
-			return -1;
+				ret = -EINVAL;
+			}
 		}
-
-		iowrite32((scaler), board->bar[0] + PICO_CONV_GEN);
-		debug_print(DEBUG_CHAR, "   scaler readback: %08x\n",
-			ioread32(board->bar[0] + PICO_CONV_GEN));
 		break;
-
-	/* ================================================================== */
-	case GET_FSAMP:
-		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
-		scaler = PICO_CLK_FREQ / scaler;
-		debug_print(DEBUG_CHAR, "   freq: %d", scaler);
-		copy_to_user((void *)arg, &scaler, 4);
-		break;
-
-	/* ================================================================== */
-	case GET_B_TRANS:
-		copy_to_user((void *)arg, (void *)&bytes_trans,
-			sizeof(uint32_t));
-		break;
-
-	/* ================================================================== */
 	case SET_TRG:
-		copy_from_user((void *)&trg, (void *)arg,
-			sizeof(struct trg_ctrl));
-
+		ret = copy_from_user(&trg, (void*)arg, sizeof(trg));
 		debug_print(DEBUG_FULL, "    trg.limit: %08x\n",
 			*(uint32_t *)&trg.limit);
 		debug_print(DEBUG_FULL, "    trg.nrsamp: %d\n", trg.nr_samp);
@@ -199,6 +167,62 @@ long char_ioctl(
 			trg.mode == POS_EDGE ?  "POS_EDGE" :
 			trg.mode == NEG_EDGE ?  "NEG_EDGE" : "BOTH_EDGE"));
 
+		break;
+	case SET_RING_BUF:
+		ret = get_user(rng_buf_delay, (uint32_t*)arg);
+		debug_print(DEBUG_FULL, "rng_buf_delay: %d\n", rng_buf_delay);
+		break;
+	case SET_GATE_MUX:
+		debug_print(DEBUG_FULL, "set gate mux: %d\n", control);
+		ret = get_user(control, (uint32_t*)arg);
+		break;
+	case SET_CONV_MUX:
+		debug_print(DEBUG_FULL, "set conv mux: %d\n", control);
+		ret = get_user(control, (uint32_t*)arg);
+		break;
+	case GET_RANGE:
+	case GET_FSAMP:
+	case GET_B_TRANS:
+	case ABORT_READ:
+		ret = 0;
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	if(ret) return ret;
+
+	board = (struct board_data *) filp->private_data;
+
+	spin_lock_irq(&board->spinner); /* enter critical section, can't sleep */
+
+	switch (cmd) {
+	case SET_RANGE:
+		control = ioread32(board->bar[0]);
+		control &= ~0xFFUL;
+		control |= range;
+		iowrite32(control, board->bar[0]);
+		control = ioread32(board->bar[0]);
+		break;
+
+	case GET_RANGE:
+		range = ioread32(board->bar[0]) & 0xFF;
+		break;
+
+	case SET_FSAMP:
+		iowrite32(scaler, board->bar[0] + PICO_CONV_GEN);
+		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
+		break;
+
+	case GET_FSAMP:
+		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
+		break;
+
+	case GET_B_TRANS:
+		control = board->bytes_trans;
+		break;
+
+	case SET_TRG:
 		iowrite32(*(uint32_t *)&trg.limit,
 			board->bar[0] + PICO_ADDR + TRG_OFFS_LIMIT);
 		iowrite32(trg.nr_samp,
@@ -215,24 +239,15 @@ long char_ioctl(
 		ctrl_tmp |= trg.ch_sel << TRG_CTRL_CH_SHIFT;
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
-		debug_print(DEBUG_CHAR, "   trigger control: %08x\n",
-			ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL));
+		control = ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
 		break;
 
-	/* ================================================================== */
 	case SET_RING_BUF:
-		copy_from_user((void *)&rng_buf_delay, (void *)arg,
-			sizeof(uint32_t));
-		debug_print(DEBUG_FULL, "rng_buf_delay: %d\n", rng_buf_delay);
 		iowrite32(rng_buf_delay,
 			board->bar[0] + PICO_ADDR + RING_BUFF_OFFS_DELAY);
 		break;
 
-	/* ================================================================== */
 	case SET_GATE_MUX:
-		copy_from_user((void *)&control, (void *)arg, sizeof(uint32_t));
-		debug_print(DEBUG_FULL, "set gate mux: %d\n", control);
-
 		control &= MUX_TRG_MASK;
 		control <<= MUX_TRG_SHIFT;
 
@@ -241,16 +256,10 @@ long char_ioctl(
 		ctrl_tmp |= control;
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
-
-		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
-			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
+		control = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
 		break;
 
-	/* ================================================================== */
 	case SET_CONV_MUX:
-		copy_from_user((void *)&control, (void *)arg, sizeof(uint32_t));
-		debug_print(DEBUG_FULL, "set conv mux: %d\n", control);
-
 		control &= MUX_CONV_MASK;
 		control <<= MUX_CONV_SHIFT;
 
@@ -259,18 +268,58 @@ long char_ioctl(
 		ctrl_tmp |= control;
 
 		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
-
-		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
-			ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG));
+		control = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
 		break;
 
-	/* ================================================================== */
+	case ABORT_READ:
+		board->irq_flag = 2;
+		wake_up_locked(&board->queue);
+
 	default:
-		printk(KERN_ERR MOD_NAME ": unknown ioctl cmd: %08x\n", cmd);
 		break;
 	}
 
-	mutex_unlock(&board->mutex);
+	spin_unlock_irq(&board->spinner); /* end of critical section, can't access board-> */
 
-	return 0;
+	/* copy to user */
+	switch (cmd) {
+	case SET_RANGE:
+		debug_print(DEBUG_CHAR, "   control reg readback: %08x\n",
+			range);
+		break;
+	case GET_RANGE:
+		debug_print(DEBUG_CHAR, "   range: %x\n", range);
+		ret = put_user(range, (uint8_t*)arg);
+		break;
+	case SET_FSAMP:
+		debug_print(DEBUG_CHAR, "   scaler readback: %08x\n",
+			scaler);
+		break;
+	case GET_FSAMP:
+		scaler = PICO_CLK_FREQ / scaler;
+		debug_print(DEBUG_CHAR, "   freq: %d", scaler);
+		ret = put_user(scaler, (uint32_t*)arg);
+		break;
+	case SET_TRG:
+		debug_print(DEBUG_CHAR, "   trigger control: %08x\n",
+			(unsigned)control);
+		break;
+	case SET_RING_BUF:
+		break;
+	case SET_GATE_MUX:
+		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
+			(unsigned)control);
+		break;
+	case SET_CONV_MUX:
+		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
+			(unsigned)control);
+		break;
+	case GET_B_TRANS:
+		ret = put_user(control, (uint32_t*)arg);
+		break;
+	case ABORT_READ:
+		break;
+	}
+
+	return ret;
 }

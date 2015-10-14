@@ -81,5 +81,7 @@ struct __attribute__((__packed__)) trg_ctrl {
 /** Sets convert signal mux */
 #define SET_CONV_MUX	_IOW(AMC_PICO_MAGIC, 80,  uint32_t*)
 
+/** Abort in progress read() w/o closing FD */
+#define ABORT_READ _IOW(AMC_PICO_MAGIC, 81, int)
 
 #endif /* AMC_PICO_H_ */

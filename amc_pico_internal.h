@@ -22,7 +22,7 @@
 #ifndef AMC_PICO_INTERNAL_H_
 #define AMC_PICO_INTERNAL_H_
 
-#include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <linux/cdev.h>
 
 #include "amc_pico.h"
@@ -51,7 +51,7 @@ struct board_data {
 	 */
 	void * __iomem bar[PCIE_NR_BARS];
 
-	struct mutex mutex;
+	spinlock_t spinner;
 
 	/* MSI interrupt TODO do we need this */
 	uint8_t msi_enabled;
@@ -75,10 +75,10 @@ struct board_data {
 	dma_addr_t dma_buf[DMA_BUF_COUNT];
 
 	unsigned read_in_progress;
-};
+	wait_queue_head_t queue;
+	unsigned irq_flag;
 
-extern uint32_t bytes_trans;
-extern wait_queue_head_t queue;
-extern int irq_flag;
+	uint32_t bytes_trans;
+};
 
 #endif /* AMC_PICO_INTERNAL_H_ */

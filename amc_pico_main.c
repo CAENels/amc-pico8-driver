@@ -50,14 +50,11 @@
 #include "amc_pico_char.h"
 #include "amc_pico_bist.h"
 
-
+static
 int version[3] = {1, 0, 7};
-uint32_t bytes_trans;
-DECLARE_WAIT_QUEUE_HEAD(queue);
 
 static
 struct class *damc_fmc25_class;
-int irq_flag;
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
@@ -80,6 +77,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 {
 	struct board_data *board;
 	uint32_t count = 0;
+	size_t nsent = 0;
 
 	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x\n", irq);
 
@@ -89,9 +87,6 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		/* interrupt was not from this device */
 		return IRQ_NONE;
 	}
-
-	/* mb(); */
-	bytes_trans = 0;
 
 	do {
 		count = ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS);
@@ -108,9 +103,9 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 			break;
 		}
 
-		bytes_trans += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+		nsent += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		debug_print(DEBUG_IRQ, "   ISR: resp count: %08x\n", count);
-		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", bytes_trans);
+		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", (unsigned)nsent);
 		debug_print(DEBUG_IRQ, "   ISR: resp addr: %08x\n",
 			ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
 
@@ -119,8 +114,12 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		mb();
 	} while (count > 0);
 
-	irq_flag = 1;
-	wake_up(&queue);
+	spin_lock_irq(&board->spinner);
+	board->irq_flag = 1;
+	board->bytes_trans = nsent;
+	wake_up_locked(&board->queue);
+	spin_unlock_irq(&board->spinner);
+
 	debug_print(DEBUG_IRQ, "ISR: waked up queue\n");
 
 	return IRQ_HANDLED;
@@ -165,8 +164,9 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);
 
-	/* initialize mutex */
-	mutex_init(&board->mutex);
+	spin_lock_init(&board->spinner);
+	init_waitqueue_head(&board->queue);
+	board->queue.lock = board->spinner;
 
 	/* Enable pci device */
 	rc = pci_enable_device(dev);
@@ -257,6 +257,12 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
+	/* perform build in self test (DMA transfer)
+	 * before making device available to user processes
+	 * to avoid having to deal with concurrency issues
+	 */
+	dev_info(&dev->dev, "BIST %d\n", BIST(dev));
+
 	debug_print(DEBUG_CHAR, "%s char_init()\n", MOD_NAME);
 
 	/* Allocate a dynamically allocated character device node */
@@ -280,7 +286,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	/* Create char device */
-	cdev = device_create(board->damc_fmc25_class, NULL, board->cdevno,
+	cdev = device_create(damc_fmc25_class, NULL, board->cdevno,
 		NULL, MOD_NAME);
 
 	/* output version and timestamp */
@@ -288,9 +294,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		ioread32(board->bar[0] + PICO_ADDR + FPGA_VER_OFFSET));
 	printk(KERN_DEBUG MOD_NAME ": FPGA HW timestamp = %d\n",
 		ioread32(board->bar[0] + PICO_ADDR + FPGA_TS_OFFSET));
-
-	/* perform build in self test (DMA transfer) */
-	//BIST(dev);
 
 	/* probe was successful */
 	return 0;
@@ -361,7 +364,7 @@ static void remove(struct pci_dev *dev)
 	}
 
 	/* Remove char device */
-	device_destroy(board->damc_fmc25_class, board->cdevno);
+	device_destroy(damc_fmc25_class, board->cdevno);
 	cdev_del(&board->cdev);
 	unregister_chrdev_region(board->cdevno, 1);
 
