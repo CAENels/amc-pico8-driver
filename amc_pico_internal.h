@@ -77,6 +77,7 @@ struct board_data {
 	/** physical address of buffers */
 	dma_addr_t dma_buf[DMA_BUF_COUNT];
 
+	unsigned read_in_progress;
 };
 
 extern uint32_t bytes_trans;

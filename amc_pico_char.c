@@ -52,7 +52,14 @@ ssize_t char_read(
 
 	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
 
-	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -1;
+	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
+
+	if(board->read_in_progress) {
+		debug_print(DEBUG_CHAR, "  read(), concurrent read()s not allowed\n");
+		mutex_unlock(&board->mutex);
+		return -EIO;
+	}
+	board->read_in_progress = 1;
 
 	/* start dma transfer */
 	i = 0;
@@ -66,9 +73,14 @@ ssize_t char_read(
 	mb();
 	dma_enable(board, 1);
 
+	mutex_unlock(&board->mutex);
+
 	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
 		msecs_to_jiffies(500*(i+1)));
+
+	mutex_lock(&board->mutex);
 	irq_flag = 0;
+	board->read_in_progress = 0;
 
 	if (rc == 0) {
 		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
