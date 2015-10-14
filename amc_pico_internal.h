@@ -62,9 +62,6 @@ struct board_data {
 	/** irq line */
 	int irq_line;
 
-	/**  */
-	struct class *damc_fmc25_class;
-
 	/** character device number */
 	dev_t cdevno;
 

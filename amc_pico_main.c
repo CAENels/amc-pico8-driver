@@ -54,6 +54,9 @@
 int version[3] = {1, 0, 7};
 uint32_t bytes_trans;
 DECLARE_WAIT_QUEUE_HEAD(queue);
+
+static
+struct class *damc_fmc25_class;
 int irq_flag;
 
 /** List of devices this driver recognizes */
@@ -254,9 +257,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
-	/* Create master class */
-	board->damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
-
 	debug_print(DEBUG_CHAR, "%s char_init()\n", MOD_NAME);
 
 	/* Allocate a dynamically allocated character device node */
@@ -365,9 +365,6 @@ static void remove(struct pci_dev *dev)
 	cdev_del(&board->cdev);
 	unregister_chrdev_region(board->cdevno, 1);
 
-	/* Remove class */
-	class_destroy(board->damc_fmc25_class);
-
 	/* Remove buffer for DMA */
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		debug_print(DEBUG_SYS, "Freeing DMA buffer at: %p\n",
@@ -445,7 +442,12 @@ static int __init damc_fmc25_pcie_init(void)
 
 	print_all_ioctls();
 
+	damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
+	if(!damc_fmc25_class) return -ENOMEM;
+
 	rc = pci_register_driver(&pci_driver);
+	if(rc)
+		class_destroy(damc_fmc25_class);
 	return rc;
 }
 
@@ -456,6 +458,7 @@ static void __exit damc_fmc25_pcie_exit(void)
 {
 	printk(KERN_DEBUG MOD_NAME " exit()\n");
 	pci_unregister_driver(&pci_driver);
+	class_destroy(damc_fmc25_class);
 }
 
 
