@@ -51,6 +51,16 @@ struct __attribute__((__packed__)) trg_ctrl {
 	enum {DISABLED, POS_EDGE, NEG_EDGE, BOTH_EDGE} mode;
 };
 
+/* Driver interface version number.
+ * Currently 1.
+ * Initialize integer w/ zero to identify version zero interface
+ * which does not fail unknown requests.
+ @code
+  int ver = 0;
+  ioctl(fd, GET_VERSION, &ver);
+ @endcode
+ */
+#define GET_VERSION	_IOR(AMC_PICO_MAGIC, 10, uint32_t)
 
 /** Sets the picoammeter range, each bit sets the individual channel,
  * RNG0 is the higher current range

@@ -186,6 +186,8 @@ long char_ioctl(
 	case ABORT_READ:
 		ret = 0;
 		break;
+	case GET_VERSION:
+		return put_user(1, (uint32_t*)arg);
 	default:
 		ret = -EINVAL;
 	}
