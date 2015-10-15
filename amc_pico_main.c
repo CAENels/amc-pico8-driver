@@ -79,8 +79,6 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	uint32_t count = 0;
 	size_t nsent = 0;
 
-	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x\n", irq);
-
 	board = (struct board_data *)dev_id;
 
 	if (board == NULL) {
@@ -88,9 +86,15 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
+	count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
+
+	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
+
+	if(count==0)
+		return IRQ_NONE;
+
 	do {
-		count = ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS);
-		count = (count >> 16) & 0x7FF;
+		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 
 		if (count == 0) {
 			debug_print(DEBUG_IRQ, "ISR: done with resp queue\n");
@@ -112,6 +116,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		/* pop from resp fifo */
 		iowrite32(0, board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		mb();
+		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 	} while (count > 0);
 
 	spin_lock_irq(&board->spinner);
