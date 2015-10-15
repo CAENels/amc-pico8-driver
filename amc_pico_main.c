@@ -50,6 +50,8 @@
 #include "amc_pico_char.h"
 #include "amc_pico_bist.h"
 
+#define DRV_NAME "CAENels Pico8"
+
 static
 int version[3] = {1, 0, 7};
 
@@ -180,6 +182,11 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		goto probe_free_board;
 	}
 
+	if (pci_request_regions(dev, DRV_NAME)) {
+		dev_err(&dev->dev, "pci_request_regions failis\n");
+		goto probe_disable_dev;
+	}
+
 	/* Enable bus mastering on device */
 	pci_set_master(dev);
 
@@ -202,7 +209,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
 		       irq_line, rc);
 		board->irq_line = -1;
-		goto probe_disable_dev;
+		goto probe_release_regions;
 	}
 
 	board->irq_line = irq_line;
@@ -328,6 +335,9 @@ probe_unmap_bars:
 		}
 	}
 
+probe_release_regions:
+	pci_release_regions(dev);
+
 probe_disable_dev:
 	free_irq(board->irq_line, (void *)board);
 	if (board->msi_enabled) {
@@ -392,6 +402,8 @@ static void remove(struct pci_dev *dev)
 			board->bar[i] = NULL;
 		}
 	}
+
+	pci_release_regions(dev);
 
 	/* Disable device */
 	pci_disable_device(dev);
