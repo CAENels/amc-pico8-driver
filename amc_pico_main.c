@@ -286,7 +286,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	/* Create char device */
-	cdev = device_create(damc_fmc25_class, NULL, board->cdevno,
+	cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
 		NULL, MOD_NAME);
 
 	/* output version and timestamp */
