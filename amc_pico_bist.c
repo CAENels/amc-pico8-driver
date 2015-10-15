@@ -45,6 +45,7 @@ int BIST(struct pci_dev *dev)
 
 	/* read mux setting */
 	mux_tmp = ioread32(board->bar[0] + MUX_ADDR);
+	dev_info(&dev->dev, "MUX now %08x\n", (unsigned)mux_tmp);
 
 	/* mux to PRBS */
 	iowrite32(1, board->bar[0] + MUX_ADDR);
@@ -57,9 +58,17 @@ int BIST(struct pci_dev *dev)
 	dma_enable(board, 1);
 	rc = wait_event_interruptible_timeout(board->queue, board->irq_flag != 0,
 		msecs_to_jiffies(1000));
-	board->irq_flag = 0;
 	t1 = ktime_get();
+
+	dev_info(&dev->dev, "wait_event %d\n", rc);
+        {
+		uint32_t val = ioread32(board->bar[0]+DMA_ADDR+DMA_OFFSET_STATUS);
+		if(val)
+			dev_warn(&dev->dev, "Response fifo not empty after BIST %08x\n", (unsigned)val);
+	}
+
 	dma_enable(board, 0);
+	board->irq_flag = 0;
 
 	if (rc == 0) {
 		dev_err(&dev->dev, "DMA was unable to finish\n");
@@ -78,6 +87,9 @@ int BIST(struct pci_dev *dev)
 			throughput);
 		rc = 0;
 	}
+
+	/* reset DMA engine for good measure */
+	dma_reset(board);
 
 	/* return mux to previous value */
 	iowrite32(mux_tmp, board->bar[0] + MUX_ADDR);

@@ -41,17 +41,13 @@ void dma_push(struct board_data *dev, uint32_t address, uint32_t length, int gen
 
 void dma_enable(struct board_data *dev, int enable)
 {
-	uint32_t ctrl;
+	uint32_t ctrl = enable ? DMA_CTRL_MASK_ENABLE : 0;
+
+
+	iowrite32(ctrl, dev->bar[0] + DMA_ADDR + DMA_OFFSET_CONTROL);
 
 	ctrl = ioread32(dev->bar[0] + DMA_ADDR + DMA_OFFSET_CONTROL);
 	debug_print(DEBUG_DMA, "   dma_enable(): ctrl read: 0x%08x\n", ctrl);
-
-	if (enable)
-		ctrl |= DMA_CTRL_MASK_ENABLE;
-	else
-		ctrl &= ~DMA_CTRL_MASK_ENABLE;
-
-	iowrite32(ctrl, dev->bar[0] + DMA_ADDR + DMA_OFFSET_CONTROL);
 }
 
 
