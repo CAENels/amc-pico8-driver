@@ -194,22 +194,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Enable bus mastering on device */
 	pci_set_master(dev);
 
-	irq_line = dev->irq;
-
-	/* Register interrupts */
-	rc = request_irq(irq_line, amc_isr, IRQF_SHARED, MOD_NAME,
-		(void *) board);
-
-	if (rc) {
-		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
-		       irq_line, rc);
-		board->irq_line = -1;
-		goto probe_release_regions;
-	}
-
-	board->irq_line = irq_line;
-	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line);
-
 	/* Scan BARs */
 	for (i = 0; i < PCIE_NR_BARS; i++) {
 		unsigned long bar_start = pci_resource_start(dev, i);
@@ -264,11 +248,32 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
+	dma_reset(board);
+
+	if(pci_enable_msi(dev))
+		goto probe_free_bufs;
+
+	irq_line = dev->irq;
+
+	/* Register interrupts */
+	rc = request_irq(irq_line, amc_isr, IRQF_SHARED, MOD_NAME,
+		(void *) board);
+
+	if (rc) {
+		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
+		       irq_line, rc);
+		board->irq_line = -1;
+		goto disable_msi;
+	}
+
+	board->irq_line = irq_line;
+	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line);
+
 	/* perform build in self test (DMA transfer)
 	 * before making device available to user processes
 	 * to avoid having to deal with concurrency issues
 	 */
-	dev_info(&dev->dev, "BIST %d\n", BIST(dev));
+	//dev_info(&dev->dev, "BIST %d\n", BIST(dev));
 
 	debug_print(DEBUG_CHAR, "%s char_init()\n", MOD_NAME);
 
@@ -278,7 +283,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* check if allocation failed */
 	if (rc < 0) {
 		printk(KERN_ERR MOD_NAME ": alloc_chrdev_region() = %d\n", rc);
-		goto probe_free_bufs;
+		goto disable_irq;
 	}
 
 	/* Add file_opperations structure to device */
@@ -310,6 +315,12 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 probe_ureg_chrdev:
 	unregister_chrdev_region(board->cdevno, 1);
 
+disable_irq:
+	free_irq(irq_line, (void *) board);
+
+disable_msi:
+	pci_disable_msi(dev);
+
 probe_free_bufs:
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		if (board->kernel_mem_buf[i]) {
@@ -330,9 +341,6 @@ probe_unmap_bars:
 		}
 	}
 
-	free_irq(irq_line, (void *) board);
-
-probe_release_regions:
 	pci_release_regions(dev);
 
 probe_disable_dev:
@@ -369,10 +377,7 @@ static void remove(struct pci_dev *dev)
 	}
 
 	/* Disable MSI */
-	if (board->msi_enabled) {
-		pci_disable_msi(dev);
-		board->msi_enabled = 0;
-	}
+	pci_disable_msi(dev);
 
 	/* Remove char device */
 	device_destroy(damc_fmc25_class, board->cdevno);
