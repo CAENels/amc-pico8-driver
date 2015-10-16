@@ -50,12 +50,12 @@ ssize_t char_read(
 
 	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
 
-	spin_lock_irq(&board->spinner);
+	spin_lock_irq(&board->queue.lock);
 
 	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
 	if(board->read_in_progress) {
-		spin_unlock_irq(&board->spinner);
+		spin_unlock_irq(&board->queue.lock);
 		debug_print(DEBUG_CHAR, "  read(), concurrent read()s not allowed\n");
 		return -EIO;
 	}
@@ -84,12 +84,12 @@ ssize_t char_read(
 		/* reset DMA engine */
 		dma_reset(board);
 		board->bytes_trans = 0;
-		spin_unlock_irq(&board->spinner);
+		spin_unlock_irq(&board->queue.lock);
 
 		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
 		return rc;
 	} else {
-		spin_unlock_irq(&board->spinner);
+		spin_unlock_irq(&board->queue.lock);
 
 		i = 0;
 		tmp_count = count;
@@ -196,7 +196,7 @@ long char_ioctl(
 
 	board = (struct board_data *) filp->private_data;
 
-	spin_lock_irq(&board->spinner); /* enter critical section, can't sleep */
+	spin_lock_irq(&board->queue.lock); /* enter critical section, can't sleep */
 
 	switch (cmd) {
 	case SET_RANGE:
@@ -281,7 +281,7 @@ long char_ioctl(
 		break;
 	}
 
-	spin_unlock_irq(&board->spinner); /* end of critical section, can't access board-> */
+	spin_unlock_irq(&board->queue.lock); /* end of critical section, can't access board-> */
 
 	/* copy to user */
 	switch (cmd) {

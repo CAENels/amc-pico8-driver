@@ -51,8 +51,6 @@ struct board_data {
 	 */
 	void * __iomem bar[PCIE_NR_BARS];
 
-	spinlock_t spinner;
-
 	/* MSI interrupt TODO do we need this */
 	uint8_t msi_enabled;
 

@@ -61,7 +61,7 @@ int BIST(struct pci_dev *dev)
 	t1 = ktime_get();
 
 	dev_info(&dev->dev, "wait_event %d\n", rc);
-        {
+	{
 		uint32_t val = ioread32(board->bar[0]+DMA_ADDR+DMA_OFFSET_STATUS);
 		if(val)
 			dev_warn(&dev->dev, "Response fifo not empty after BIST %08x\n", (unsigned)val);
@@ -70,7 +70,7 @@ int BIST(struct pci_dev *dev)
 	dma_enable(board, 0);
 	board->irq_flag = 0;
 
-	if (rc == 0) {
+	if (rc <= 0) {
 		dev_err(&dev->dev, "DMA was unable to finish\n");
 		rc = -1;
 	} else {

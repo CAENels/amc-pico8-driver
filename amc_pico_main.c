@@ -80,6 +80,8 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	struct board_data *board;
 	uint32_t count = 0;
 	size_t nsent = 0;
+	unsigned long flags;
+	unsigned cycles = 0;
 
 	board = (struct board_data *)dev_id;
 
@@ -119,13 +121,17 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		iowrite32(0, board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		mb();
 		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-	} while (count > 0);
+	} while (count > 0 && cycles++>100);
 
-	spin_lock_irq(&board->spinner);
+	if(cycles>=100) {
+		dev_warn(&board->pci_dev->dev, "ISR ran away, stopping\n");
+	}
+
+	spin_lock_irqsave(&board->queue.lock, flags);
 	board->irq_flag = 1;
 	board->bytes_trans = nsent;
 	wake_up_locked(&board->queue);
-	spin_unlock_irq(&board->spinner);
+	spin_unlock_irqrestore(&board->queue.lock, flags);
 
 	debug_print(DEBUG_IRQ, "ISR: waked up queue\n");
 
@@ -171,9 +177,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);
 
-	spin_lock_init(&board->spinner);
 	init_waitqueue_head(&board->queue);
-	board->queue.lock = board->spinner;
 
 	/* Enable pci device */
 	rc = pci_enable_device(dev);
@@ -189,15 +193,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* Enable bus mastering on device */
 	pci_set_master(dev);
-
-	/* Enable MSI interrupts */
-	rc = pci_enable_msi(dev);
-	if (rc) {
-		printk(KERN_DEBUG MOD_NAME ": unable to use MSI interrupts\n");
-		board->msi_enabled = 0;
-	} else {
-		board->msi_enabled = 1;
-	}
 
 	irq_line = dev->irq;
 
@@ -335,11 +330,12 @@ probe_unmap_bars:
 		}
 	}
 
+	free_irq(irq_line, (void *) board);
+
 probe_release_regions:
 	pci_release_regions(dev);
 
 probe_disable_dev:
-	free_irq(board->irq_line, (void *)board);
 	if (board->msi_enabled) {
 		pci_disable_msi(dev);
 		board->msi_enabled = 0;
@@ -368,8 +364,8 @@ static void remove(struct pci_dev *dev)
 		printk(KERN_DEBUG "irq_count: %d\n",board->irq_count);
 
 		printk(KERN_DEBUG "Freeing IRQ #%d for dev_id 0x%08lx.\n",
-			board->irq_line, (unsigned long)board);
-			free_irq(board->irq_line, (void *)board);
+		board->irq_line, (unsigned long)board);
+		free_irq(board->irq_line, (void *)board);
 	}
 
 	/* Disable MSI */
