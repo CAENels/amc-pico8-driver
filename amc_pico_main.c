@@ -277,7 +277,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* Create char device */
 	cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
-		NULL, MOD_NAME);
+			NULL, MOD_NAME "_%s", pci_name(dev));
 
 	/* output version and timestamp */
 	dev_info(&dev->dev, "FPGA HW version = %08x\n",
