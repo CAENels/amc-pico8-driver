@@ -50,7 +50,7 @@
 #include "amc_pico_char.h"
 #include "amc_pico_bist.h"
 
-#define DRV_NAME "CAENels Pico8"
+#define DRV_NAME "AMC-Pico8 Driver"
 
 static
 int version[3] = {1, 0, 7};
@@ -60,7 +60,9 @@ struct class *damc_fmc25_class;
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
-	{ PCI_DEVICE(0x10ee, 0x0007), },
+	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_XILINX, 0x0007,
+					AMC_PICO_SUBVENDOR_ID, AMC_PICO_SUBDEVICE_ID)
+	},
 	{ 0, }
 };
 
@@ -146,25 +148,12 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	int irq_line;
 	struct device *cdev;
 
-	printk(KERN_DEBUG MOD_NAME " probe()\n");
-	printk(KERN_DEBUG MOD_NAME " subvendor id: %04x\n",
-		dev->subsystem_vendor);
-	printk(KERN_DEBUG MOD_NAME " subdevice id: %04x\n",
-		dev->subsystem_device);
-
-	if( (dev->subsystem_vendor != AMC_PICO_SUBVENDOR_ID)
-			&& (dev->subsystem_device != AMC_PICO_SUBDEVICE_ID)){
-		printk(KERN_DEBUG MOD_NAME " This device is not AMC-Pico8\n");
-		printk(KERN_DEBUG MOD_NAME " we will not claim it.\n");
-		return -1;
-	}
-
+	dev_info(&dev->dev, "probe()\n");
 
 	/* Allocate memory for board structure */
 	board = kzalloc(sizeof(struct board_data), GFP_KERNEL);
 	if (!board) {
-		printk(KERN_DEBUG MOD_NAME " kzalloc() failed.\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	board->pci_dev = dev;
@@ -177,7 +166,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Enable pci device */
 	rc = pci_enable_device(dev);
 	if (rc) {
-		printk(KERN_DEBUG MOD_NAME ": pci_enable_device() failed\n");
+		dev_err(&dev->dev, "pci_enable_device() failed\n");
 		goto probe_free_board;
 	}
 
@@ -197,48 +186,44 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 			unsigned long bar_end = pci_resource_end(dev, i);
 			unsigned long bar_flags = pci_resource_flags(dev, i);
 			/* unsigned long bar_len = bar_end - bar_start + 1; */
-			debug_print(DEBUG_SYS,
-				"BAR%d 0x%08lx-0x%08lx flags 0x%08lx\n",
+			dev_dbg(&dev->dev, "BAR%d 0x%08lx-0x%08lx flags 0x%08lx\n",
 				i, bar_start, bar_end, bar_flags);
 
 			board->bar[i] = pci_ioremap_bar(dev, i);
-			debug_print(DEBUG_SYS, "BAR%d mapping: %p\n",
+			dev_dbg(&dev->dev, "BAR%d mapping: %p\n",
 			        i, board->bar[i]);
 		}
 	}
 
 	/* check if we got BAR0 (all FPGA logic is there) */
 	if (!board->bar[0]) {
-		printk(KERN_DEBUG MOD_NAME ": BAR0 not available, exiting\n");
+		dev_err(&dev->dev, "BAR0 not available\n");
 		goto probe_unmap_bars;
 	}
 
 	/* Our DMA supports only 32-bit addressing */
 	rc = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
 	if (rc < 0) {
-		printk(KERN_DEBUG MOD_NAME
-			": Problem setting DMA mask\n");
+		dev_err(&dev->dev, "Problem setting DMA mask\n");
 		goto probe_unmap_bars;
 	}
 
 	rc = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
 	if (rc < 0) {
-		printk(KERN_DEBUG MOD_NAME
-			": Problem setting consistent DMA mask\n");
+		dev_err(&dev->dev, "Problem setting consistent DMA mask\n");
 		goto probe_unmap_bars;
 	}
 
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		board->kernel_mem_buf[i] =
 		pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
-		debug_print(DEBUG_SYS, "pci_alloc() buf addr: %p",
+		dev_dbg(&dev->dev, "pci_alloc() buf addr: %p",
 			board->kernel_mem_buf[i]);
-		debug_print(DEBUG_SYS, "\tsize: %d, bus_addr: 0x%08llx\n",
+		dev_dbg(&dev->dev, "\tsize: %d, bus_addr: 0x%08llx\n",
 			DMA_BUF_SIZE, board->dma_buf[i]);
 
 		if (!board->dma_buf[i]) {
-			printk(KERN_DEBUG MOD_NAME
-				": Problem allocating buffer %d, exiting\n", i);
+			dev_err(&dev->dev, "Problem allocating buffer %d, exiting\n", i);
 			goto probe_free_bufs;
 		}
 	}
@@ -255,14 +240,14 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		(void *) board);
 
 	if (rc) {
-		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
+		dev_err(&dev->dev, "Could not request IRQ #%d, error %d\n",
 		       irq_line, rc);
 		board->irq_line = -1;
 		goto disable_msi;
 	}
 
 	board->irq_line = irq_line;
-	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line);
+	dev_dbg(&dev->dev, "Succesfully requested IRQ #%d\n", irq_line);
 
 	/* perform build in self test (DMA transfer)
 	 * before making device available to user processes
@@ -270,14 +255,12 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	 */
 	//dev_info(&dev->dev, "BIST %d\n", BIST(dev));
 
-	debug_print(DEBUG_CHAR, "%s char_init()\n", MOD_NAME);
-
 	/* Allocate a dynamically allocated character device node */
 	rc = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
 
 	/* check if allocation failed */
 	if (rc < 0) {
-		printk(KERN_ERR MOD_NAME ": alloc_chrdev_region() = %d\n", rc);
+		dev_err(&dev->dev, "alloc_chrdev_region() = %d\n", rc);
 		goto disable_irq;
 	}
 
@@ -288,7 +271,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Add char device */
 	rc = cdev_add(&board->cdev, board->cdevno, 1);
 	if (rc < 0) {
-		printk(KERN_ERR MOD_NAME ": cdev_add() = %d\n", rc);
+		dev_err(&dev->dev, "cdev_add() = %d\n", rc);
 		goto probe_ureg_chrdev;
 	}
 
@@ -297,9 +280,9 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		NULL, MOD_NAME);
 
 	/* output version and timestamp */
-	printk(KERN_DEBUG MOD_NAME ": FPGA HW version = %08x\n",
+	dev_info(&dev->dev, "FPGA HW version = %08x\n",
 		ioread32(board->bar[0] + PICO_ADDR + FPGA_VER_OFFSET));
-	printk(KERN_DEBUG MOD_NAME ": FPGA HW timestamp = %d\n",
+	dev_info(&dev->dev, "FPGA HW timestamp = %d\n",
 		ioread32(board->bar[0] + PICO_ADDR + FPGA_TS_OFFSET));
 
 	/* probe was successful */
@@ -319,7 +302,7 @@ disable_msi:
 probe_free_bufs:
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
 		if (board->kernel_mem_buf[i]) {
-			debug_print(DEBUG_SYS, "Freeing DMA buffer at: %p\n",
+			dev_dbg(&dev->dev, "Freeing DMA buffer at: %p\n",
 				board->kernel_mem_buf[i]);
 
 			pci_free_consistent(	dev,
@@ -361,12 +344,12 @@ static void remove(struct pci_dev *dev)
 	int i;
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
-	printk(KERN_DEBUG MOD_NAME " remove()\n");
+	dev_info(&dev->dev, " remove()\n");
 
 	if (board->irq_line >= 0) {
-		printk(KERN_DEBUG "irq_count: %d\n",board->irq_count);
+		dev_info(&dev->dev, "irq_count: %d\n",board->irq_count);
 
-		printk(KERN_DEBUG "Freeing IRQ #%d for dev_id 0x%08lx.\n",
+		dev_dbg(&dev->dev, "Freeing IRQ #%d for dev_id 0x%08lx.\n",
 		board->irq_line, (unsigned long)board);
 		free_irq(board->irq_line, (void *)board);
 	}
@@ -381,7 +364,7 @@ static void remove(struct pci_dev *dev)
 
 	/* Remove buffer for DMA */
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
-		debug_print(DEBUG_SYS, "Freeing DMA buffer at: %p\n",
+		dev_dbg(&dev->dev, "Freeing DMA buffer at: %p\n",
 			board->kernel_mem_buf[i]);
 
 		pci_free_consistent(	dev,
@@ -484,4 +467,4 @@ module_exit(damc_fmc25_pcie_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jan Marjanovic <j.marjanovic@caenels.com>");
-MODULE_DESCRIPTION("AMC-Pico8 Driver");
+MODULE_DESCRIPTION(DRV_NAME);
