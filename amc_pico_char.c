@@ -21,19 +21,33 @@
 
 #include "amc_pico_char.h"
 
+static
 int char_open(struct inode *inode, struct file *file)
 {
-	struct board_data *board;
+	struct board_data *board = container_of(inode->i_cdev, struct board_data, cdev);
 
-	debug_print(DEBUG_CHAR, "char_open()\n");
+	dev_dbg(&board->pci_dev->dev, "char_open()\n");
 
-	board = container_of(inode->i_cdev, struct board_data, cdev);
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
+
 	file->private_data = board;
 
 	return 0;
 }
 
+static
+int char_release(struct inode *inode, struct file *file)
+{
+	struct board_data *board = container_of(inode->i_cdev, struct board_data, cdev);
 
+	dev_dbg(&board->pci_dev->dev, "char_release()\n");
+
+	module_put(THIS_MODULE);
+	return 0;
+}
+
+static
 ssize_t char_read(
 	struct file *filp,
 	char __user *buf,
@@ -113,7 +127,7 @@ ssize_t char_read(
 	return count;
 }
 
-
+static
 long char_ioctl(
 	struct file *filp,
 	unsigned int cmd,
@@ -325,3 +339,11 @@ long char_ioctl(
 
 	return ret;
 }
+
+const struct file_operations amc_pico_fops = {
+	.owner		= THIS_MODULE,
+	.open		= char_open,
+	.release	= char_release,
+	.read		= char_read,
+	.unlocked_ioctl = char_ioctl
+};

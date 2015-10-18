@@ -58,6 +58,15 @@ int version[3] = {1, 0, 7};
 static
 struct class *damc_fmc25_class;
 
+/* allow DMA buffer size to be selected at load time.
+ * May be reduced for testing
+ */
+static
+unsigned long damc_req_dma_buf_len = 4*1024*1024;
+module_param_named(dma_buf_len, damc_req_dma_buf_len, ulong, 0444);
+
+unsigned long damc_dma_buf_len;
+
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
 	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_XILINX, 0x0007,
@@ -68,15 +77,6 @@ static const struct pci_device_id ids[] = {
 
 MODULE_DEVICE_TABLE(pci, ids);
 
-
-static const struct file_operations fops = {
-	.owner		= THIS_MODULE,
-	.open		= char_open,
-	.read		= char_read,
-	.unlocked_ioctl = char_ioctl
-};
-
-
 static irqreturn_t amc_isr(int irq, void *dev_id)
 {
 	struct board_data *board;
@@ -84,6 +84,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	size_t nsent = 0;
 	unsigned long flags;
 	unsigned cycles = 0;
+	int op = 1;
 
 	board = (struct board_data *)dev_id;
 
@@ -94,7 +95,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 
 	count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 
-	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
+	dev_dbg(&board->pci_dev->dev, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
 
 	if(count==0)
 		return IRQ_NONE;
@@ -104,31 +105,32 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 			dev_err(&board->pci_dev->dev,
 				"something wrong when reading from DMA\n");
 			break;
+
+		} else if (cycles++>100) {
+			dev_err_ratelimited(&board->pci_dev->dev, "FIFO ran away, stopping\n");
+			op = 2;
+			break;
 		}
 
 		nsent += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
-		debug_print(DEBUG_IRQ, "   ISR: resp count: %08x\n", count);
-		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", (unsigned)nsent);
-		debug_print(DEBUG_IRQ, "   ISR: resp addr: %08x\n",
+		dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
+		dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
+		dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
 			ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
 
 		/* pop from resp fifo */
 		iowrite32(0, board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		mb();
 		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-	} while (count > 0 && cycles++<100);
-
-	if(cycles>=100) {
-		dev_warn(&board->pci_dev->dev, "ISR ran away, stopping\n");
-	}
+	} while (count > 0);
 
 	spin_lock_irqsave(&board->queue.lock, flags);
-	board->irq_flag = 1;
+	board->irq_flag = op;
 	board->bytes_trans = nsent;
 	wake_up_locked(&board->queue);
 	spin_unlock_irqrestore(&board->queue.lock, flags);
 
-	debug_print(DEBUG_IRQ, "ISR: waked up queue\n");
+	dev_dbg(&board->pci_dev->dev, "ISR: waked up queue\n");
 
 	return IRQ_HANDLED;
 }
@@ -219,8 +221,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
 		dev_dbg(&dev->dev, "pci_alloc() buf addr: %p",
 			board->kernel_mem_buf[i]);
-		dev_dbg(&dev->dev, "\tsize: %d, bus_addr: 0x%08llx\n",
-			DMA_BUF_SIZE, board->dma_buf[i]);
+		dev_dbg(&dev->dev, "\tsize: %u, bus_addr: 0x%08llx\n",
+			(unsigned)DMA_BUF_SIZE, board->dma_buf[i]);
 
 		if (!board->dma_buf[i]) {
 			dev_err(&dev->dev, "Problem allocating buffer %d, exiting\n", i);
@@ -265,7 +267,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	/* Add file_opperations structure to device */
-	cdev_init(&board->cdev, &fops);
+	cdev_init(&board->cdev, &amc_pico_fops);
 	board->cdev.owner = THIS_MODULE;
 
 	/* Add char device */
@@ -360,6 +362,14 @@ static void remove(struct pci_dev *dev)
 	/* Remove char device */
 	device_destroy(damc_fmc25_class, board->cdevno);
 	cdev_del(&board->cdev);
+
+	spin_lock_irq(&board->queue.lock);
+	if(board->read_in_progress) {
+		board->irq_flag = 2;
+		wake_up_locked(&board->queue);
+	}
+	spin_unlock_irq(&board->queue.lock);
+
 	unregister_chrdev_region(board->cdevno, 1);
 
 	/* Remove buffer for DMA */
@@ -430,6 +440,8 @@ void print_all_ioctls(void){
 static int __init damc_fmc25_pcie_init(void)
 {
 	int rc = 0;
+
+	damc_dma_buf_len = damc_req_dma_buf_len;
 
 	printk(KERN_DEBUG "===============================================\n");
 	printk(KERN_DEBUG "              CAEN ELS AMC-PICO8               \n");

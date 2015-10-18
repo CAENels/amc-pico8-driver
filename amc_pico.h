@@ -34,12 +34,6 @@
 #endif
 
 
-/** Number of buffers allocated for DMA */
-#define DMA_BUF_COUNT		(8)
-
-/** Buffer size allocated (should be <= 4MB) */
-#define DMA_BUF_SIZE		(4*1024*1024)
-
 /** AMC-Pico magic number */
 #define	AMC_PICO_MAGIC	'P'
 

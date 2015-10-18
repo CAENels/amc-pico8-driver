@@ -31,6 +31,12 @@
 /** Driver name (shows in lsmod and dmesg) */
 #define MOD_NAME "amc_pico"
 
+/** Number of buffers allocated for DMA */
+#define DMA_BUF_COUNT		(8)
+
+/** Buffer size allocated (should be <= 4MB) */
+#define DMA_BUF_SIZE		damc_dma_buf_len
+extern unsigned long damc_dma_buf_len;
 
 /** Maximal number of BARs */
 #define PCIE_NR_BARS	7

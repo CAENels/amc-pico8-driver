@@ -39,43 +39,6 @@
 #include "amc_pico_dma.h"
 #include "amc_pico_debug.h"
 
-/**
- * \brief Stores board struct in private data
- * \param inode   index node structure
- * \param file    file structure
- * \returns       0 on success, negative number on fail
- */
-int char_open(struct inode *inode, struct file *file);
-
-
-/**
- * \brief Reads the picoammeter measurement data
- * \param filp    file structure
- * \param buf     user space buffer
- * \param count   number of bytes to read
- * \param pos     position in file
- * \returns the number of bytes requested (parameter count), even if the
- * transfer was terminated early. The application should get the number
- * of bytes actually transfered using the ioctl(GET_B_TRANS).
- *
- * Reads the picoammeter measurement data using DMA in the FPGA. Each sample
- * is 32 bytes wide (8 channels x 4 bytes per channel (float)). This function
- * will put the calling thread to sleep until the DMA finishes the transfer.
- *
- */
-ssize_t char_read(struct file *filp, char __user *buf, size_t count,
-	loff_t *pos);
-
-/**
- * \brief Performs various configuration tasks
- * \param filp    file structure
- * \param cmd     defines in amc_pico.h
- * \param arg     corresponding argument to define in amc_pico.h
- *
- * Performs various configuration tasks, such as setting the picoammeter range,
- * setting the trigger parameters and setting the sampling frequency.
- */
-long char_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
-
+extern const struct file_operations amc_pico_fops;
 
 #endif /* AMC_PICO_CHAR_H_ */
