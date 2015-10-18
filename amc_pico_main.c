@@ -98,16 +98,9 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		return IRQ_NONE;
 
 	do {
-		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-
-		if (count == 0) {
-			debug_print(DEBUG_IRQ, "ISR: done with resp queue\n");
-			break;
-		}
-
 		if (count == 0xFFFFFFFFUL) {
-			printk(KERN_ERR MOD_NAME
-				": something wrong when reading from DMA\n");
+			dev_err(&board->pci_dev->dev,
+				"something wrong when reading from DMA\n");
 			break;
 		}
 
@@ -121,7 +114,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		iowrite32(0, board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		mb();
 		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-	} while (count > 0 && cycles++>100);
+	} while (count > 0 && cycles++<100);
 
 	if(cycles>=100) {
 		dev_warn(&board->pci_dev->dev, "ISR ran away, stopping\n");
@@ -173,6 +166,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		printk(KERN_DEBUG MOD_NAME " kzalloc() failed.\n");
 		return -1;
 	}
+
+	board->pci_dev = dev;
 
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);
