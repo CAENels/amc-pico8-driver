@@ -157,8 +157,6 @@ long char_ioctl(
 	case SET_FSAMP:
 		ret = get_user(scaler, (uint32_t*)arg);
 		if(!ret) {
-			/* convert freq to scaler (340MHz is clk freq of FPGA) */
-			scaler = PICO_CLK_FREQ / scaler - 1;
 			debug_print(DEBUG_CHAR, "clock scaler: %d\n", scaler);
 
 			if ((scaler == 0) || scaler > PICO_CONV_MAX){
@@ -312,8 +310,7 @@ long char_ioctl(
 			scaler);
 		break;
 	case GET_FSAMP:
-		scaler = PICO_CLK_FREQ / scaler;
-		debug_print(DEBUG_CHAR, "   freq: %d", scaler);
+		debug_print(DEBUG_CHAR, "   scaler: %d", scaler);
 		ret = put_user(scaler, (uint32_t*)arg);
 		break;
 	case SET_TRG:
