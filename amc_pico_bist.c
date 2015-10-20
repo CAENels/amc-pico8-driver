@@ -77,7 +77,7 @@ int BIST(struct pci_dev *dev)
 		time_needed = ktime_to_ns(ktime_sub(t1, t0));
 
 		/* 953 = ns->s, b->Mb */
-		throughput = (buf_size*8)/(time_needed/953);
+		throughput = (buf_size*8)/do_div(time_needed,953);
 
 		printk(KERN_DEBUG MOD_NAME ":  DMA trans size: %d bytes\n",
 			buf_size);
