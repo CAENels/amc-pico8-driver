@@ -76,6 +76,9 @@ ssize_t char_read(
 		dma_reset(board);
 		bytes_trans = 0;
 		count = 0;
+	} else if (rc < 0) {
+		debug_print(DEBUG_CHAR, "  read(): wait interrupted\n");
+		return -ERESTARTSYS;
 	} else {
 		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
 		i = 0;
