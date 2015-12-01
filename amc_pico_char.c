@@ -78,6 +78,8 @@ ssize_t char_read(
 		count = 0;
 	} else if (rc < 0) {
 		debug_print(DEBUG_CHAR, "  read(): wait interrupted\n");
+		dma_reset(board);
+		mutex_unlock(&board->mutex);
 		return -ERESTARTSYS;
 	} else {
 		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
