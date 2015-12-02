@@ -64,9 +64,9 @@ ssize_t char_read(
 
 	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
 
-	spin_lock_irq(&board->queue.lock);
+    if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
-	if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
+    spin_lock_irq(&board->queue.lock);
 
 	if(board->read_in_progress) {
 		spin_unlock_irq(&board->queue.lock);
