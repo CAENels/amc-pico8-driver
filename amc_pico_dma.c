@@ -46,8 +46,11 @@ void dma_enable(struct board_data *dev, int enable)
 
 	iowrite32(ctrl, dev->bar[0] + DMA_ADDR + DMA_OFFSET_CONTROL);
 
+/** Register access during DMA sometimes trigger hard lockup of device.
+ *  The following is a great way to trigger this.
 	ctrl = ioread32(dev->bar[0] + DMA_ADDR + DMA_OFFSET_CONTROL);
 	debug_print(DEBUG_DMA, "   dma_enable(): ctrl read: 0x%08x\n", ctrl);
+ */
 }
 
 
