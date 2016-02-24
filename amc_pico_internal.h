@@ -62,9 +62,6 @@ struct board_data {
 	/** irq line */
 	int irq_line;
 
-	/**  */
-	struct class *damc_fmc25_class;
-
 	/** character device number */
 	dev_t cdevno;
 
@@ -77,10 +74,10 @@ struct board_data {
 	/** physical address of buffers */
 	dma_addr_t dma_buf[DMA_BUF_COUNT];
 
+	uint32_t bytes_trans;
+	int irq_flag;
+	wait_queue_head_t queue;
 };
 
-extern uint32_t bytes_trans;
-extern wait_queue_head_t queue;
-extern int irq_flag;
 
 #endif /* AMC_PICO_INTERNAL_H_ */

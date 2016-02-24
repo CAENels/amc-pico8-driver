@@ -52,9 +52,8 @@
 
 
 int version[3] = {1, 0, 7};
-uint32_t bytes_trans;
-DECLARE_WAIT_QUEUE_HEAD(queue);
-int irq_flag;
+struct class *amc_pico8_class;
+
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
@@ -88,7 +87,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	}
 
 	/* mb(); */
-	bytes_trans = 0;
+	board->bytes_trans = 0;
 
 	do {
 		count = ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS);
@@ -105,9 +104,10 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 			break;
 		}
 
-		bytes_trans += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+		board->bytes_trans +=
+			ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		debug_print(DEBUG_IRQ, "   ISR: resp count: %08x\n", count);
-		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", bytes_trans);
+		debug_print(DEBUG_IRQ, "   ISR: resp len: %08x\n", board->bytes_trans);
 		debug_print(DEBUG_IRQ, "   ISR: resp addr: %08x\n",
 			ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
 
@@ -116,8 +116,8 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		mb();
 	} while (count > 0);
 
-	irq_flag = 1;
-	wake_up(&queue);
+	board->irq_flag = 1;
+	wake_up(&board->queue);
 	debug_print(DEBUG_IRQ, "ISR: waked up queue\n");
 
 	return IRQ_HANDLED;
@@ -164,6 +164,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* initialize mutex */
 	mutex_init(&board->mutex);
+	init_waitqueue_head(&board->queue);
 
 	/* Enable pci device */
 	rc = pci_enable_device(dev);
@@ -254,9 +255,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		}
 	}
 
-	/* Create master class */
-	board->damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
-
 	debug_print(DEBUG_CHAR, "%s char_init()\n", MOD_NAME);
 
 	/* Allocate a dynamically allocated character device node */
@@ -280,8 +278,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	/* Create char device */
-	cdev = device_create(board->damc_fmc25_class, NULL, board->cdevno,
-		NULL, MOD_NAME);
+	cdev = device_create(amc_pico8_class, NULL, board->cdevno,
+		NULL, MOD_NAME "_%s", pci_name(dev));
 
 	/* output version and timestamp */
 	printk(KERN_DEBUG MOD_NAME ": FPGA HW version = %08x\n",
@@ -361,12 +359,9 @@ static void remove(struct pci_dev *dev)
 	}
 
 	/* Remove char device */
-	device_destroy(board->damc_fmc25_class, board->cdevno);
+	device_destroy(amc_pico8_class, board->cdevno);
 	cdev_del(&board->cdev);
 	unregister_chrdev_region(board->cdevno, 1);
-
-	/* Remove class */
-	class_destroy(board->damc_fmc25_class);
 
 	/* Remove buffer for DMA */
 	for (i = 0; i < DMA_BUF_COUNT; i++) {
@@ -445,6 +440,9 @@ static int __init damc_fmc25_pcie_init(void)
 
 	print_all_ioctls();
 
+	/* Create AMC-Pico-8 class */
+	amc_pico8_class = class_create(THIS_MODULE, MOD_NAME);
+
 	rc = pci_register_driver(&pci_driver);
 	return rc;
 }
@@ -456,6 +454,9 @@ static void __exit damc_fmc25_pcie_exit(void)
 {
 	printk(KERN_DEBUG MOD_NAME " exit()\n");
 	pci_unregister_driver(&pci_driver);
+
+	/* Remove class */
+	class_destroy(amc_pico8_class);
 }
 
 

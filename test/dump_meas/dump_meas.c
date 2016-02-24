@@ -12,8 +12,9 @@
 
 
 #define BYTES_PER_LINE	(32)
-#define AMC_PICO_DEV	"/dev/amc_pico"
 #define OUT_FORMAT		"%+0.6e"
+
+char AMC_PICO_DEV[128];
 
 ////////////////////////////////////////////////////////////////////////////////
 /// \brief prints usage information
@@ -22,12 +23,13 @@ void print_usage(const char* name){
 	printf("AMC-Pico-8 measurement dump\n");
 	printf("\n");
 	printf("Arguments:\n");
+	printf("    --devfile DEVFILE  Device file in /dev")
 	printf("    --nrsamp NRSAMP  Number of samples to read\n");
 	printf("    --out FILENAME   Output file name\n");
 	printf("    --force          Overwrites output file\n");
 	printf("\n");
 	printf("Example:\n");
-	printf("    %s --nrsamp 100 --out meas1.csv", name);
+	printf("    %s --devfile /dev/amc_pico_0000:05:00.0 --nrsamp 100 --out meas1.csv", name);
 	printf("\n");
 }
 
@@ -38,7 +40,7 @@ int read_from_pico(uint32_t nrsamp, void *buf) {
 
 	int fd = open(AMC_PICO_DEV, O_RDONLY | O_SYNC);
 	if (fd<0) {
-		perror("open(\"" AMC_PICO_DEV "\")");
+		perror("open()");
 		return -1;
 	}
 
@@ -89,6 +91,7 @@ int main(int argc, char** argv) {
 
 	static struct option long_options[] = {
 		{"help",    no_argument,       NULL, 'h' },
+		{"devfile", required_argument, NULL, 'd' },
 		{"nrsamp",  required_argument, NULL, 'n' },
 		{"out",     required_argument, NULL, 'o' },
 		{"force",   no_argument, NULL, 'f' },
@@ -105,6 +108,8 @@ int main(int argc, char** argv) {
 		case 'h':
 			print_usage(argv[0]);
 			return 0;
+		case 'd':
+			strncpy(AMC_PICO_DEV, optarg, sizeof(AMC_PICO_DEV));
 		case 'n':
 			sscanf(optarg, "%i", &nrsamp);
 			break;

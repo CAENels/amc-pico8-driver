@@ -66,15 +66,15 @@ ssize_t char_read(
 	mb();
 	dma_enable(board, 1);
 
-	rc = wait_event_interruptible_timeout(queue, irq_flag != 0,
+	rc = wait_event_interruptible_timeout(board->queue, board->irq_flag != 0,
 		msecs_to_jiffies(500*(i+1)));
-	irq_flag = 0;
+	board->irq_flag = 0;
 
 	if (rc == 0) {
 		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
 		/* reset DMA engine */
 		dma_reset(board);
-		bytes_trans = 0;
+		board->bytes_trans = 0;
 		count = 0;
 	} else if (rc < 0) {
 		debug_print(DEBUG_CHAR, "  read(): wait interrupted\n");
@@ -174,7 +174,7 @@ long char_ioctl(
 
 	/* ================================================================== */
 	case GET_B_TRANS:
-		copy_to_user((void *)arg, (void *)&bytes_trans,
+		copy_to_user((void *)arg, (void *)&board->bytes_trans,
 			sizeof(uint32_t));
 		break;
 
