@@ -9,11 +9,11 @@ display_usage() {
 	echo "floating point format)"
 	echo ""
 	echo "Usage:"
-	echo "    $0 NR_LINES"
+	echo "    $0 DEVFILE NR_LINES"
 	echo ""
 }
 
-if [ $# -ne 1 ]; then
+if [ $# -ne 2 ]; then
 	display_usage
 	exit 1
 fi
@@ -24,6 +24,6 @@ if [[ ( $1 == "--help") || ($1 == "-h") ]]; then
 fi
 
 nr_bytes_per_line=32
-nr_bytes=$(echo "$1*$nr_bytes_per_line" | bc)
+nr_bytes=$(echo "$2*$nr_bytes_per_line" | bc)
 
-head -c $nr_bytes /dev/amc_pico | hexdump -e '8/4 "%+.2e " "\n"' | less
+head -c $nr_bytes $1 | hexdump -e '8/4 "%+.2e " "\n"' | less
