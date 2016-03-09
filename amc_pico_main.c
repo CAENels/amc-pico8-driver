@@ -51,7 +51,7 @@
 #include "amc_pico_bist.h"
 
 
-int version[3] = {1, 0, 7};
+int version[3] = {1, 0, 8};
 struct class *amc_pico8_class;
 
 
