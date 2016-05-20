@@ -145,7 +145,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 		dev->subsystem_device);
 
 	if( (dev->subsystem_vendor != AMC_PICO_SUBVENDOR_ID)
-			&& (dev->subsystem_device != AMC_PICO_SUBDEVICE_ID)){
+			|| (dev->subsystem_device != AMC_PICO_SUBDEVICE_ID)){
 		printk(KERN_DEBUG MOD_NAME " This device is not AMC-Pico8\n");
 		printk(KERN_DEBUG MOD_NAME " we will not claim it.\n");
 		return -1;
