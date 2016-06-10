@@ -112,13 +112,13 @@ ssize_t char_read(
 		while (tmp_count > DMA_BUF_SIZE && rc==0) {
 			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
 					board->kernel_mem_buf[i], DMA_BUF_SIZE);
-			i++;
 			tmp_count -= DMA_BUF_SIZE;
 			/* sometimes the DMA done interrupt comes even though nothing has been
 			 * transfered.  Fill our buffer with a test pattern so that this is more
 			 * obvious.
 			 */
 			memset(board->kernel_mem_buf[i], 0xf0, DMA_BUF_SIZE);
+			i++;
 		}
 		if(rc==0) {
 			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
