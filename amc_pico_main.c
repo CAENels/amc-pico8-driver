@@ -181,7 +181,7 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
 
     ret = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
     if(!ret) ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
-    ERR(!ret, unmap, "Failed to set DMA masks\n");
+    ERR(ret, unmap, "Failed to set DMA masks\n");
 
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         board->kernel_mem_buf[i] = pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
@@ -199,11 +199,11 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     pci_set_master(dev);
 
     ret = request_irq(dev->irq, &amc_isr, IRQF_SHARED|IRQF_DISABLED, "pico_acq", &board);
-    ERR(!ret, msidisable, "Failed to attach acquire ISR\n");
+    ERR(ret, msidisable, "Failed to attach acquire ISR\n");
 
     if(board->numirqs>1) {
         ret = request_irq(dev->irq+1, &amc_user_isr, IRQF_DISABLED, "pico_user", &board);
-        ERR(!ret, stopirq0, "Failed to attach user ISR\n");
+        ERR(ret, stopirq0, "Failed to attach user ISR\n");
     }
 
     return 0;
@@ -272,13 +272,13 @@ int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
     int ret;
 
     ret = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
-    ERR(!ret, done, "Failed to allocate chrdev number\n");
+    ERR(ret, done, "Failed to allocate chrdev number\n");
 
     cdev_init(&board->cdev, &amc_pico_fops);
     board->cdev.owner = THIS_MODULE;
 
     ret = cdev_add(&board->cdev, board->cdevno, 1);
-    ERR(!ret, cfree, "Failed to add chrdev\n")
+    ERR(ret, cfree, "Failed to add chrdev\n")
 
     cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
                          NULL, MOD_NAME "_%s", pci_name(dev));
