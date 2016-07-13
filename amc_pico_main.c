@@ -93,7 +93,7 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-	count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
+    count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 
 	dev_dbg(&board->pci_dev->dev, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
 
@@ -112,16 +112,16 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 			break;
 		}
 
-		nsent += ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+        nsent += ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
 		dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
 		dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
-			ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
+            ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
 
 		/* pop from resp fifo */
-		iowrite32(0, board->bar[0] + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+        iowrite32(0, board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
 		mb();
-		count = (ioread32(board->bar[0] + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
+        count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 	} while (count > 0);
 
 	spin_lock_irqsave(&board->queue.lock, flags);
@@ -180,25 +180,10 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Enable bus mastering on device */
 	pci_set_master(dev);
 
-	/* Scan BARs */
-	for (i = 0; i < PCIE_NR_BARS; i++) {
-		unsigned long bar_start = pci_resource_start(dev, i);
-
-		if (bar_start) {
-			unsigned long bar_end = pci_resource_end(dev, i);
-			unsigned long bar_flags = pci_resource_flags(dev, i);
-			/* unsigned long bar_len = bar_end - bar_start + 1; */
-			dev_dbg(&dev->dev, "BAR%d 0x%08lx-0x%08lx flags 0x%08lx\n",
-				i, bar_start, bar_end, bar_flags);
-
-			board->bar[i] = pci_ioremap_bar(dev, i);
-			dev_dbg(&dev->dev, "BAR%d mapping: %p\n",
-			        i, board->bar[i]);
-		}
-	}
+    board->bar0 = pci_ioremap_bar(dev, 0);
 
 	/* check if we got BAR0 (all FPGA logic is there) */
-	if (!board->bar[0]) {
+    if (!board->bar0) {
 		dev_err(&dev->dev, "BAR0 not available\n");
 		goto probe_unmap_bars;
 	}
@@ -283,9 +268,9 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	/* output version and timestamp */
 	dev_info(&dev->dev, "FPGA HW version = %08x\n",
-		ioread32(board->bar[0] + PICO_ADDR + FPGA_VER_OFFSET));
+        ioread32(board->bar0 + PICO_ADDR + FPGA_VER_OFFSET));
 	dev_info(&dev->dev, "FPGA HW timestamp = %d\n",
-		ioread32(board->bar[0] + PICO_ADDR + FPGA_TS_OFFSET));
+        ioread32(board->bar0 + PICO_ADDR + FPGA_TS_OFFSET));
 
 	/* probe was successful */
 	return 0;
@@ -314,12 +299,7 @@ probe_free_bufs:
 		}
 	}
 probe_unmap_bars:
-	for (i = 0; i < PCIE_NR_BARS; i++) {
-		if (board->bar[i]) {
-			pci_iounmap(dev, board->bar[i]);
-			board->bar[i] = NULL;
-		}
-	}
+    pci_iounmap(dev, board->bar0);
 
 	pci_release_regions(dev);
 
@@ -385,12 +365,7 @@ static void remove(struct pci_dev *dev)
 
 
 	/* Unmap BARs */
-	for (i = 0; i < PCIE_NR_BARS; i++) {
-		if (board->bar[i]) {
-			pci_iounmap(dev, board->bar[i]);
-			board->bar[i] = NULL;
-		}
-	}
+    pci_iounmap(dev, board->bar0);
 
 	pci_release_regions(dev);
 

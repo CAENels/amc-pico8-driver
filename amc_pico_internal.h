@@ -55,7 +55,7 @@ struct board_data {
 	/** kernel virtual address of the mapped BAR memory and IO regions of
 	 *  the End Point. Used by map_bars()/unmap_bars().
 	 */
-	void * __iomem bar[PCIE_NR_BARS];
+	void * __iomem bar0;
 
 	/* MSI interrupt TODO do we need this */
 	uint8_t msi_enabled;

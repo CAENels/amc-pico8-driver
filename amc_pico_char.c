@@ -219,24 +219,24 @@ long char_ioctl(
 
 	switch (cmd) {
 	case SET_RANGE:
-		control = ioread32(board->bar[0]);
+		control = ioread32(board->bar0);
 		control &= ~0xFFUL;
 		control |= range;
-		iowrite32(control, board->bar[0]);
-		control = ioread32(board->bar[0]);
+		iowrite32(control, board->bar0);
+		control = ioread32(board->bar0);
 		break;
 
 	case GET_RANGE:
-		range = ioread32(board->bar[0]) & 0xFF;
+		range = ioread32(board->bar0) & 0xFF;
 		break;
 
 	case SET_FSAMP:
-		iowrite32(scaler, board->bar[0] + PICO_CONV_GEN);
-		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
+		iowrite32(scaler, board->bar0 + PICO_CONV_GEN);
+		scaler = ioread32(board->bar0 + PICO_CONV_GEN);
 		break;
 
 	case GET_FSAMP:
-		scaler = ioread32(board->bar[0] + PICO_CONV_GEN);
+		scaler = ioread32(board->bar0 + PICO_CONV_GEN);
 		break;
 
 	case GET_B_TRANS:
@@ -245,11 +245,11 @@ long char_ioctl(
 
 	case SET_TRG:
 		iowrite32(*(uint32_t *)&trg.limit,
-			board->bar[0] + PICO_ADDR + TRG_OFFS_LIMIT);
+			board->bar0 + PICO_ADDR + TRG_OFFS_LIMIT);
 		iowrite32(trg.nr_samp,
-			board->bar[0] + PICO_ADDR + TRG_OFFS_NRSAMP);
+			board->bar0 + PICO_ADDR + TRG_OFFS_NRSAMP);
 
-		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
+		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
 
 		/* change the trigger edge */
 		ctrl_tmp &= ~(0x3);
@@ -259,37 +259,37 @@ long char_ioctl(
 		ctrl_tmp &= ~(0x7 << TRG_CTRL_CH_SHIFT);
 		ctrl_tmp |= trg.ch_sel << TRG_CTRL_CH_SHIFT;
 
-		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
-		control = ioread32(board->bar[0] + PICO_ADDR + TRG_OFFS_CTRL);
+		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
+		control = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
 		break;
 
 	case SET_RING_BUF:
 		iowrite32(rng_buf_delay,
-			board->bar[0] + PICO_ADDR + RING_BUFF_OFFS_DELAY);
+			board->bar0 + PICO_ADDR + RING_BUFF_OFFS_DELAY);
 		break;
 
 	case SET_GATE_MUX:
 		control &= MUX_TRG_MASK;
 		control <<= MUX_TRG_SHIFT;
 
-		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		ctrl_tmp &= ~(MUX_TRG_MASK << MUX_TRG_SHIFT);
 		ctrl_tmp |= control;
 
-		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
-		control = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + PICO_CONV_TRG);
+		control = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
 
 	case SET_CONV_MUX:
 		control &= MUX_CONV_MASK;
 		control <<= MUX_CONV_SHIFT;
 
-		ctrl_tmp = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		ctrl_tmp &= ~(MUX_CONV_MASK << MUX_CONV_SHIFT);
 		ctrl_tmp |= control;
 
-		iowrite32(ctrl_tmp, board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
-		control = ioread32(board->bar[0] + PICO_ADDR + PICO_CONV_TRG);
+		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + PICO_CONV_TRG);
+		control = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
 
 	case ABORT_READ:

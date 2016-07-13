@@ -44,11 +44,11 @@ int BIST(struct pci_dev *dev)
 	tmp_buf = pci_alloc_consistent(dev, buf_size, &tmp_buf_dma);
 
 	/* read mux setting */
-	mux_tmp = ioread32(board->bar[0] + MUX_ADDR);
+	mux_tmp = ioread32(board->bar0 + MUX_ADDR);
 	dev_info(&dev->dev, "MUX now %08x\n", (unsigned)mux_tmp);
 
 	/* mux to PRBS */
-	iowrite32(1, board->bar[0] + MUX_ADDR);
+	iowrite32(1, board->bar0 + MUX_ADDR);
 
 	/* DMA transfer */
 	board->irq_flag = 0;
@@ -62,7 +62,7 @@ int BIST(struct pci_dev *dev)
 
 	dev_info(&dev->dev, "wait_event %d\n", rc);
 	{
-		uint32_t val = ioread32(board->bar[0]+DMA_ADDR+DMA_OFFSET_STATUS);
+		uint32_t val = ioread32(board->bar0+DMA_ADDR+DMA_OFFSET_STATUS);
 		if(val)
 			dev_warn(&dev->dev, "Response fifo not empty after BIST %08x\n", (unsigned)val);
 	}
@@ -92,7 +92,7 @@ int BIST(struct pci_dev *dev)
 	dma_reset(board);
 
 	/* return mux to previous value */
-	iowrite32(mux_tmp, board->bar[0] + MUX_ADDR);
+	iowrite32(mux_tmp, board->bar0 + MUX_ADDR);
 
 	/* free buffer */
 	pci_free_consistent(dev, buf_size, tmp_buf, tmp_buf_dma);
