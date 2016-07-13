@@ -59,14 +59,15 @@ int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
     int nreq = maxvec;
     while(nreq>=minvec) {
         int nalloc = pci_enable_msi_block(dev, nreq);
-        if(nalloc==0) return nreq;
+        dev_info(&dev->dev, "Requesting %d MSI IRQs -> %d\n", nreq, nalloc);
+        if(nalloc==0) break;
         else if(nalloc>nreq) {
             dev_err(&dev->dev, "pci_enable_msi_block() breaks contract %d %d\n", nreq, nalloc);
             return -EINVAL;
         } /* else nalloc<nreq */
         nreq = nalloc;
     }
-    if(nreq>=0)
+    if(nreq<=0)
         nreq = -EINVAL;
     return nreq;
 }
@@ -197,7 +198,7 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     ret = pci_enable_msi_range(dev, 1, 2);
     ERR(ret<1, freebufs, "Failed to enable any MSI interrupts\n");
     board->numirqs = (unsigned)ret;
-    dev_info(&dev->dev, "Advertises %u MSI IRQs\n", board->numirqs);
+    dev_info(&dev->dev, "Acquired %u MSI IRQs\n", board->numirqs);
 
     pci_set_master(dev);
 
@@ -288,7 +289,7 @@ int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
 
     cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
                          NULL, MOD_NAME "_%s", pci_name(dev));
-    ERR(PTR_ERR(cdev), cdel, "Failed to allocate device\n");
+    ERR(IS_ERR(cdev), cdel, "Failed to allocate device\n");
 
     return 0;
 //devdtor:
@@ -343,7 +344,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
     if(!ret) {
         dma_reset(board);
         ret = pico_cdev_setup(dev, board);
-        if(!ret) {
+        if(ret) {
             pico_pci_cleanup(dev, board);
         }
     }
