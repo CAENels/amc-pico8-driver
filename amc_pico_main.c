@@ -177,6 +177,8 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     ret = pci_request_regions(dev, DRV_NAME);
     ERR(ret, pcidisable, "Failed to configure BARs\n");
 
+    ret = -EIO;
+
     board->bar0 = pci_ioremap_bar(dev, 0);
     ERR(!board->bar0, release, "Failed to map BAR0\n");
 
@@ -187,6 +189,7 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     if(!ret) ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
     ERR(ret, unmap2, "Failed to set DMA masks\n");
 
+    ret = -ENOMEM;
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         board->kernel_mem_buf[i] = pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
         ERR(!board->kernel_mem_buf[i], freebufs, "Failed to allocate DMA buffer %u\n", i);
@@ -289,6 +292,7 @@ int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
 
     cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
                          NULL, MOD_NAME "_%s", pci_name(dev));
+    ret = -ENOMEM;
     ERR(IS_ERR(cdev), cdel, "Failed to allocate device\n");
 
     return 0;
