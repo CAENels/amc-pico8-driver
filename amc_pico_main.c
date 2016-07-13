@@ -135,6 +135,156 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t amc_user_isr(int irq, void *dev_id)
+{
+    struct board_data *board = (struct board_data *)dev_id;
+    dev_info(&board->pci_dev->dev, "USER IRQ\n");
+    return IRQ_HANDLED;
+}
+
+static
+int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
+{
+#define ERR(COND, LBL, MSG, ...) if(COND) { dev_err(&dev->dev, MSG, ##__VA_ARGS__); goto LBL; }
+
+    unsigned i;
+    int ret;
+
+    ret = pci_enable_device(dev);
+    ERR(ret, done, "Failed to enable\n");
+
+    ret = pci_request_regions(dev, DRV_NAME);
+    ERR(ret, pcidisable, "Failed to configure BARs\n");
+
+    board->bar0 = pci_ioremap_bar(dev, 0);
+    ERR(!board->bar0, release, "Failed to map BAR0\n");
+
+    ret = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
+    if(!ret) ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
+    ERR(!ret, unmap, "Failed to set DMA masks\n");
+
+    for (i = 0; i < DMA_BUF_COUNT; i++) {
+        board->kernel_mem_buf[i] = pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
+        ERR(!board->kernel_mem_buf[i], freebufs, "Failed to allocate DMA buffer %u\n", i);
+
+        dev_dbg(&dev->dev, "pci_alloc() virt addr: %p\tsize: %u, phys addr: 0x%08llx\n",
+            board->kernel_mem_buf[i], (unsigned)DMA_BUF_SIZE, board->dma_buf[i]);
+    }
+
+    ret = pci_enable_msi_range(dev, 1, 2);
+    ERR(ret<1, freebufs, "Failed to enable any MSI interrupts\n");
+    board->numirqs = (unsigned)ret;
+    dev_info(&dev->dev, "Advertises %u MSI IRQs\n", board->numirqs);
+
+    pci_set_master(dev);
+
+    ret = request_irq(dev->irq, &amc_isr, IRQF_SHARED|IRQF_DISABLED, "pico_acq", &board);
+    ERR(!ret, msidisable, "Failed to attach acquire ISR\n");
+
+    if(board->numirqs>1) {
+        ret = request_irq(dev->irq+1, &amc_user_isr, IRQF_DISABLED, "pico_user", &board);
+        ERR(!ret, stopirq0, "Failed to attach user ISR\n");
+    }
+
+    return 0;
+//stopirq1:
+//    if(board->numirqs>1) free_irq(dev->irq+1, &board);
+stopirq0:
+    free_irq(dev->irq, &board);
+msidisable:
+    pci_disable_msi(dev);
+freebufs:
+    for (i = 0; i < DMA_BUF_COUNT; i++) {
+        if(!board->kernel_mem_buf[i]) continue;
+        pci_free_consistent(	dev,
+                    DMA_BUF_SIZE,
+                    board->kernel_mem_buf[i],
+                    board->dma_buf[i]);
+    }
+unmap:
+    pci_iounmap(dev, board->bar0);
+release:
+    pci_release_regions(dev);
+pcidisable:
+    pci_disable_device(dev);
+done:
+    return ret;
+#undef ERR
+}
+
+static
+int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
+{
+    unsigned i;
+    if(board->numirqs>1) free_irq(dev->irq+1, &board);
+    free_irq(dev->irq, &board);
+    pci_disable_msi(dev);
+    for (i = 0; i < DMA_BUF_COUNT; i++) {
+        if(!board->kernel_mem_buf[i]) continue;
+        pci_free_consistent(	dev,
+                    DMA_BUF_SIZE,
+                    board->kernel_mem_buf[i],
+                    board->dma_buf[i]);
+    }
+    pci_iounmap(dev, board->bar0);
+    pci_release_regions(dev);
+    pci_disable_device(dev);
+    return 0;
+}
+
+static
+void pico_wait_for_op(struct board_data *board)
+{
+    spin_lock_irq(&board->queue.lock);
+    if(board->read_in_progress) {
+        board->irq_flag = 2;
+        wake_up_locked(&board->queue);
+    }
+    spin_unlock_irq(&board->queue.lock);
+}
+
+static
+int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
+{
+#define ERR(COND, LBL, MSG, ...) if(COND) { dev_err(&dev->dev, MSG, ##__VA_ARGS__); goto LBL; }
+
+    struct device *cdev;
+    int ret;
+
+    ret = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
+    ERR(!ret, done, "Failed to allocate chrdev number\n");
+
+    cdev_init(&board->cdev, &amc_pico_fops);
+    board->cdev.owner = THIS_MODULE;
+
+    ret = cdev_add(&board->cdev, board->cdevno, 1);
+    ERR(!ret, cfree, "Failed to add chrdev\n")
+
+    cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
+                         NULL, MOD_NAME "_%s", pci_name(dev));
+    ERR(PTR_ERR(cdev), cdel, "Failed to allocate device\n");
+
+    return 0;
+//devdtor:
+//    device_destroy(damc_fmc25_class, board->cdevno);
+cdel:
+    cdev_del(&board->cdev);
+    pico_wait_for_op(board);
+cfree:
+    unregister_chrdev_region(board->cdevno, 1);
+done:
+    return ret;
+#undef ERR
+}
+
+static
+void pico_cdev_cleanup(struct pci_dev *dev, struct board_data *board)
+{
+    device_destroy(damc_fmc25_class, board->cdevno);
+    cdev_del(&board->cdev);
+    pico_wait_for_op(board);
+    unregister_chrdev_region(board->cdevno, 1);
+}
 
 /**
  * \brief Claims control of PCI device
@@ -145,10 +295,8 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 
 static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	int rc, i;
-	struct board_data *board = NULL;
-	int irq_line;
-	struct device *cdev;
+    int ret;
+    struct board_data *board = NULL;
 
 	dev_info(&dev->dev, "probe()\n");
 
@@ -165,155 +313,21 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	init_waitqueue_head(&board->queue);
 
-	/* Enable pci device */
-	rc = pci_enable_device(dev);
-	if (rc) {
-		dev_err(&dev->dev, "pci_enable_device() failed\n");
-		goto probe_free_board;
-	}
-
-	if (pci_request_regions(dev, DRV_NAME)) {
-		dev_err(&dev->dev, "pci_request_regions failis\n");
-		goto probe_disable_dev;
-	}
-
-	/* Enable bus mastering on device */
-	pci_set_master(dev);
-
-    board->bar0 = pci_ioremap_bar(dev, 0);
-
-	/* check if we got BAR0 (all FPGA logic is there) */
-    if (!board->bar0) {
-		dev_err(&dev->dev, "BAR0 not available\n");
-		goto probe_unmap_bars;
-	}
-
-	/* Our DMA supports only 32-bit addressing */
-	rc = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
-	if (rc < 0) {
-		dev_err(&dev->dev, "Problem setting DMA mask\n");
-		goto probe_unmap_bars;
-	}
-
-	rc = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
-	if (rc < 0) {
-		dev_err(&dev->dev, "Problem setting consistent DMA mask\n");
-		goto probe_unmap_bars;
-	}
-
-	for (i = 0; i < DMA_BUF_COUNT; i++) {
-		board->kernel_mem_buf[i] =
-		pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
-		dev_dbg(&dev->dev, "pci_alloc() buf addr: %p",
-			board->kernel_mem_buf[i]);
-		dev_dbg(&dev->dev, "\tsize: %u, bus_addr: 0x%08llx\n",
-			(unsigned)DMA_BUF_SIZE, board->dma_buf[i]);
-
-		if (!board->dma_buf[i]) {
-			dev_err(&dev->dev, "Problem allocating buffer %d, exiting\n", i);
-			goto probe_free_bufs;
-		}
-	}
-
-	dma_reset(board);
-
-	if(pci_enable_msi(dev))
-		goto probe_free_bufs;
-
-	irq_line = dev->irq;
-
-	/* Register interrupts */
-	rc = request_irq(irq_line, amc_isr, IRQF_SHARED, MOD_NAME,
-		(void *) board);
-
-	if (rc) {
-		dev_err(&dev->dev, "Could not request IRQ #%d, error %d\n",
-		       irq_line, rc);
-		board->irq_line = -1;
-		goto disable_msi;
-	}
-
-	board->irq_line = irq_line;
-	dev_dbg(&dev->dev, "Succesfully requested IRQ #%d\n", irq_line);
-
-	/* perform build in self test (DMA transfer)
-	 * before making device available to user processes
-	 * to avoid having to deal with concurrency issues
-	 */
-	//dev_info(&dev->dev, "BIST %d\n", BIST(dev));
-
-	/* Allocate a dynamically allocated character device node */
-	rc = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
-
-	/* check if allocation failed */
-	if (rc < 0) {
-		dev_err(&dev->dev, "alloc_chrdev_region() = %d\n", rc);
-		goto disable_irq;
-	}
-
-	/* Add file_opperations structure to device */
-	cdev_init(&board->cdev, &amc_pico_fops);
-	board->cdev.owner = THIS_MODULE;
-
-	/* Add char device */
-	rc = cdev_add(&board->cdev, board->cdevno, 1);
-	if (rc < 0) {
-		dev_err(&dev->dev, "cdev_add() = %d\n", rc);
-		goto probe_ureg_chrdev;
-	}
-
-	/* Create char device */
-	cdev = device_create(damc_fmc25_class, &dev->dev, board->cdevno,
-			NULL, MOD_NAME "_%s", pci_name(dev));
-
-	/* output version and timestamp */
-	dev_info(&dev->dev, "FPGA HW version = %08x\n",
-        ioread32(board->bar0 + PICO_ADDR + FPGA_VER_OFFSET));
-	dev_info(&dev->dev, "FPGA HW timestamp = %d\n",
-        ioread32(board->bar0 + PICO_ADDR + FPGA_TS_OFFSET));
-
-	/* probe was successful */
-	return 0;
-
-
-/* various exit paths when a fail occurs during probing */
-probe_ureg_chrdev:
-	unregister_chrdev_region(board->cdevno, 1);
-
-disable_irq:
-	free_irq(irq_line, (void *) board);
-
-disable_msi:
-	pci_disable_msi(dev);
-
-probe_free_bufs:
-	for (i = 0; i < DMA_BUF_COUNT; i++) {
-		if (board->kernel_mem_buf[i]) {
-			dev_dbg(&dev->dev, "Freeing DMA buffer at: %p\n",
-				board->kernel_mem_buf[i]);
-
-			pci_free_consistent(	dev,
-						DMA_BUF_SIZE,
-						board->kernel_mem_buf[i],
-						board->dma_buf[i]);
-		}
-	}
-probe_unmap_bars:
-    pci_iounmap(dev, board->bar0);
-
-	pci_release_regions(dev);
-
-probe_disable_dev:
-	if (board->msi_enabled) {
-		pci_disable_msi(dev);
-		board->msi_enabled = 0;
-	}
-	pci_disable_device(dev);
-
-probe_free_board:
-	kfree(board);
-
-	return -1;
+    ret = pico_pci_setup(dev, board);
+    if(!ret) {
+        dma_reset(board);
+        ret = pico_cdev_setup(dev, board);
+        if(!ret) {
+            pico_pci_cleanup(dev, board);
+        }
+    }
+    if(!ret) {
+        dev_info(&dev->dev, "FPGA HW version = %08x\n",
+            ioread32(board->bar0 + PICO_ADDR + FPGA_VER_OFFSET));
+        dev_info(&dev->dev, "FPGA HW timestamp = %d\n",
+            ioread32(board->bar0 + PICO_ADDR + FPGA_TS_OFFSET));
+    }
+    return ret;
 }
 
 /**
@@ -323,54 +337,11 @@ probe_free_board:
 
 static void remove(struct pci_dev *dev)
 {
-	int i;
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
 	dev_info(&dev->dev, " remove()\n");
-
-	if (board->irq_line >= 0) {
-		dev_info(&dev->dev, "irq_count: %d\n",board->irq_count);
-
-		dev_dbg(&dev->dev, "Freeing IRQ #%d for dev_id 0x%08lx.\n",
-		board->irq_line, (unsigned long)board);
-		free_irq(board->irq_line, (void *)board);
-	}
-
-	/* Disable MSI */
-	pci_disable_msi(dev);
-
-	/* Remove char device */
-	device_destroy(damc_fmc25_class, board->cdevno);
-	cdev_del(&board->cdev);
-
-	spin_lock_irq(&board->queue.lock);
-	if(board->read_in_progress) {
-		board->irq_flag = 2;
-		wake_up_locked(&board->queue);
-	}
-	spin_unlock_irq(&board->queue.lock);
-
-	unregister_chrdev_region(board->cdevno, 1);
-
-	/* Remove buffer for DMA */
-	for (i = 0; i < DMA_BUF_COUNT; i++) {
-		dev_dbg(&dev->dev, "Freeing DMA buffer at: %p\n",
-			board->kernel_mem_buf[i]);
-
-		pci_free_consistent(	dev,
-					DMA_BUF_SIZE,
-					board->kernel_mem_buf[i],
-					board->dma_buf[i]);
-	}
-
-
-	/* Unmap BARs */
-    pci_iounmap(dev, board->bar0);
-
-	pci_release_regions(dev);
-
-	/* Disable device */
-	pci_disable_device(dev);
+    pico_cdev_cleanup(dev, board);
+    pico_pci_cleanup(dev, board);
 
 	/* Free allocated memory */
 	kfree(board);

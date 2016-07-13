@@ -59,12 +59,10 @@ struct board_data {
 
 	/* MSI interrupt TODO do we need this */
 	uint8_t msi_enabled;
+    unsigned numirqs;
 
 	/* number of interrupts */
-	uint32_t irq_count;
-
-	/** irq line */
-	int irq_line;
+    uint32_t irq_count;
 
 	/** character device number */
 	dev_t cdevno;
