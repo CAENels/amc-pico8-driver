@@ -179,9 +179,12 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     board->bar0 = pci_ioremap_bar(dev, 0);
     ERR(!board->bar0, release, "Failed to map BAR0\n");
 
+    board->bar2 = pci_ioremap_bar(dev, 2);
+    ERR(!board->bar2, unmap0, "Failed to map BAR2\n");
+
     ret = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
     if(!ret) ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
-    ERR(ret, unmap, "Failed to set DMA masks\n");
+    ERR(ret, unmap2, "Failed to set DMA masks\n");
 
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         board->kernel_mem_buf[i] = pci_alloc_consistent(dev, DMA_BUF_SIZE, &board->dma_buf[i]);
@@ -221,7 +224,9 @@ freebufs:
                     board->kernel_mem_buf[i],
                     board->dma_buf[i]);
     }
-unmap:
+unmap2:
+    pci_iounmap(dev, board->bar2);
+unmap0:
     pci_iounmap(dev, board->bar0);
 release:
     pci_release_regions(dev);
@@ -246,6 +251,7 @@ int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
                     board->kernel_mem_buf[i],
                     board->dma_buf[i]);
     }
+    pci_iounmap(dev, board->bar2);
     pci_iounmap(dev, board->bar0);
     pci_release_regions(dev);
     pci_disable_device(dev);

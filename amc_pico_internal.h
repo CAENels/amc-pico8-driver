@@ -56,6 +56,7 @@ struct board_data {
 	 *  the End Point. Used by map_bars()/unmap_bars().
 	 */
 	void * __iomem bar0;
+	void * __iomem bar2;
 
 	/* MSI interrupt TODO do we need this */
 	uint8_t msi_enabled;
