@@ -23,6 +23,7 @@
  * \brief Register the module with PCIe subsytem
  */
 
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/cdev.h>
 #include <linux/delay.h>
@@ -51,6 +52,25 @@
 #include "amc_pico_bist.h"
 
 #define DRV_NAME "AMC-Pico8 Driver"
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
+{
+    int nreq = maxvec;
+    while(nreq>=minvec) {
+        int nalloc = pci_enable_msi_block(dev, nreq);
+        if(nalloc==0) return nreq;
+        else if(nalloc>nreq) {
+            dev_err(&dev->dev, "pci_enable_msi_block() breaks contract %d %d\n", nreq, nalloc);
+            return -EINVAL;
+        } /* else nalloc<nreq */
+        nreq = nalloc;
+    }
+    if(nreq>=0)
+        nreq = -EINVAL;
+    return nreq;
+}
+#endif
 
 static
 int version[3] = {1, 0, 7};
