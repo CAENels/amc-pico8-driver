@@ -123,6 +123,24 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t amc_user_irq(int irq, void *dev_id)
+{
+	struct board_data *board;
+
+	debug_print(DEBUG_IRQ, "ISR: amc_user_irq: 0x%x\n", irq);
+
+	board = (struct board_data *)dev_id;
+
+	if (board == NULL) {
+		/* interrupt was not from this device */
+		printk(KERN_DEBUG "return IRQ_NONE\n");
+		return IRQ_NONE;
+	}
+
+	printk(KERN_DEBUG "return IRQ_HANDLED\n");
+	return IRQ_HANDLED;
+}
+
 
 /**
  * \brief Claims control of PCI device
@@ -177,8 +195,10 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	pci_set_master(dev);
 
 	/* Enable MSI interrupts */
-	rc = pci_enable_msi(dev);
-	if (rc) {
+	//rc = pci_enable_msi(dev);
+	rc = pci_enable_msi_block(dev, 3);
+	printk(KERN_DEBUG "pci_enable_msi_block(dev, 3	): %d\n", rc);
+	if (rc < 0) {
 		printk(KERN_DEBUG MOD_NAME ": unable to use MSI interrupts\n");
 		board->msi_enabled = 0;
 	} else {
@@ -200,6 +220,20 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	board->irq_line = irq_line;
 	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line);
+
+	/* Register user-logic interrupt */
+	rc = request_irq(irq_line + 1, amc_user_irq, IRQF_SHARED, MOD_NAME,
+		(void *) board);
+	rc = request_irq(irq_line + 2, amc_user_irq, IRQF_SHARED, MOD_NAME,
+		(void *) board);
+	if (rc) {
+		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
+		       irq_line + 1, rc);
+		board->irq_line = -1;
+		goto probe_disable_dev;
+	}
+
+	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line + 1);
 
 	/* Scan BARs */
 	for (i = 0; i < PCIE_NR_BARS; i++) {
@@ -320,6 +354,7 @@ probe_unmap_bars:
 
 probe_disable_dev:
 	free_irq(board->irq_line, (void *)board);
+	free_irq(board->irq_line + 1, (void *)board);
 	if (board->msi_enabled) {
 		pci_disable_msi(dev);
 		board->msi_enabled = 0;
@@ -350,6 +385,8 @@ static void remove(struct pci_dev *dev)
 		printk(KERN_DEBUG "Freeing IRQ #%d for dev_id 0x%08lx.\n",
 			board->irq_line, (unsigned long)board);
 			free_irq(board->irq_line, (void *)board);
+			free_irq(board->irq_line + 1, (void *)board);
+			free_irq(board->irq_line + 2, (void *)board);
 	}
 
 	/* Disable MSI */
