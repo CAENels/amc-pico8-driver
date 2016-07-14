@@ -53,6 +53,10 @@
 
 #define DRV_NAME "AMC-Pico8 Driver"
 
+#ifndef CONFIG_PCI_MSI
+# error CONFIG_PCI_MSI is required
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
 {
@@ -185,6 +189,8 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     board->bar2 = pci_ioremap_bar(dev, 2);
     ERR(!board->bar2, unmap0, "Failed to map BAR2\n");
 
+    pci_set_master(dev);
+
     ret = pci_set_dma_mask(dev, DMA_BIT_MASK(32));
     if(!ret) ret = pci_set_consistent_dma_mask(dev, DMA_BIT_MASK(32));
     ERR(ret, unmap2, "Failed to set DMA masks\n");
@@ -203,19 +209,17 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
     board->numirqs = (unsigned)ret;
     dev_info(&dev->dev, "Acquired %u MSI IRQs\n", board->numirqs);
 
-    pci_set_master(dev);
-
-    ret = request_irq(dev->irq, &amc_isr, IRQF_SHARED|IRQF_DISABLED, "pico_acq", &board);
+    ret = request_irq(dev->irq, &amc_isr, 0, "pico_acq", board);
     ERR(ret, msidisable, "Failed to attach acquire ISR\n");
 
     if(board->numirqs>1) {
-        ret = request_irq(dev->irq+1, &amc_user_isr, IRQF_DISABLED, "pico_user", &board);
+        ret = request_irq(dev->irq+1, &amc_user_isr, 0, "pico_user", board);
         ERR(ret, stopirq0, "Failed to attach user ISR\n");
     }
 
     return 0;
 //stopirq1:
-//    if(board->numirqs>1) free_irq(dev->irq+1, &board);
+//    if(board->numirqs>1) free_irq(dev->irq+1, board);
 stopirq0:
     free_irq(dev->irq, &board);
 msidisable:
@@ -245,9 +249,11 @@ static
 int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
 {
     unsigned i;
-    if(board->numirqs>1) free_irq(dev->irq+1, &board);
-    free_irq(dev->irq, &board);
+    if(board->numirqs>1) free_irq(dev->irq+1, board);
+    free_irq(dev->irq, board);
+
     pci_disable_msi(dev);
+
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         if(!board->kernel_mem_buf[i]) continue;
         pci_free_consistent(	dev,
@@ -255,9 +261,12 @@ int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
                     board->kernel_mem_buf[i],
                     board->dma_buf[i]);
     }
+
     pci_iounmap(dev, board->bar2);
     pci_iounmap(dev, board->bar0);
+
     pci_release_regions(dev);
+
     pci_disable_device(dev);
     return 0;
 }
@@ -346,17 +355,17 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
     ret = pico_pci_setup(dev, board);
     if(!ret) {
-        dma_reset(board);
-        ret = pico_cdev_setup(dev, board);
-        if(ret) {
-            pico_pci_cleanup(dev, board);
-        }
-    }
-    if(!ret) {
         dev_info(&dev->dev, "FPGA HW version = %08x\n",
             ioread32(board->bar0 + PICO_ADDR + FPGA_VER_OFFSET));
         dev_info(&dev->dev, "FPGA HW timestamp = %d\n",
             ioread32(board->bar0 + PICO_ADDR + FPGA_TS_OFFSET));
+
+        dma_reset(board);
+
+        ret = pico_cdev_setup(dev, board);
+        if(ret) {
+            pico_pci_cleanup(dev, board);
+        }
     }
     return ret;
 }
