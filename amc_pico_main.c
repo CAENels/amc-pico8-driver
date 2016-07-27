@@ -71,20 +71,8 @@ static const struct file_operations fops = {
 	.unlocked_ioctl = char_ioctl
 };
 
-
-static irqreturn_t amc_isr(int irq, void *dev_id)
-{
-	struct board_data *board;
+static void amc_pico_dma_isr(struct board_data* board) {
 	uint32_t count = 0;
-
-	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x\n", irq);
-
-	board = (struct board_data *)dev_id;
-
-	if (board == NULL) {
-		/* interrupt was not from this device */
-		return IRQ_NONE;
-	}
 
 	/* mb(); */
 	board->bytes_trans = 0;
@@ -119,25 +107,57 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	board->irq_flag = 1;
 	wake_up(&board->queue);
 	debug_print(DEBUG_IRQ, "ISR: waked up queue\n");
-
-	return IRQ_HANDLED;
 }
 
-static irqreturn_t amc_user_irq(int irq, void *dev_id)
+static void amc_user_irq(struct board_data* board) {
+	uint32_t pico2ddr_status;
+
+	printk(KERN_DEBUG "in amc_user_irq()\n");
+
+	pico2ddr_status = ioread32(board->bar[0] + 0x30004);
+	printk(KERN_DEBUG "  pico2ddr_status: 0x%08x\n", pico2ddr_status);
+}
+
+static irqreturn_t amc_isr(int irq, void *dev_id)
 {
 	struct board_data *board;
+	uint32_t reg_mask;
+	int isr_selector;
 
-	debug_print(DEBUG_IRQ, "ISR: amc_user_irq: 0x%x\n", irq);
+	debug_print(DEBUG_IRQ, "ISR: irq: 0x%x\n", irq);
 
 	board = (struct board_data *)dev_id;
 
 	if (board == NULL) {
 		/* interrupt was not from this device */
-		printk(KERN_DEBUG "return IRQ_NONE\n");
 		return IRQ_NONE;
 	}
 
-	printk(KERN_DEBUG "return IRQ_HANDLED\n");
+	if (board->bar[0] == NULL) {
+		debug_print(DEBUG_IRQ, "calling interrupt before mapping BARs\n");
+		return IRQ_NONE;
+	}
+
+	reg_mask = ioread32(board->bar[0] + INTR_ADDR + INTR_LATCH_OFFSET);
+	debug_print(DEBUG_IRQ, "interrupt mask: %x\n",  reg_mask);
+	isr_selector = __builtin_ffs(reg_mask);
+	debug_print(DEBUG_IRQ, "serving irq: %d\n", isr_selector);
+
+	switch (isr_selector){
+	case 1:
+		amc_pico_dma_isr(board);
+		break;
+	case 2:
+		amc_user_irq(board);
+		break;
+	default:
+		debug_print(DEBUG_IRQ, "unknown interrupt (sel: %d)\n", isr_selector);
+		break;
+	}
+
+	iowrite32(0x1<<(isr_selector-1),
+		board->bar[0] + INTR_ADDR + INTR_CLEAR_OFFSET);
+
 	return IRQ_HANDLED;
 }
 
@@ -194,16 +214,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* Enable bus mastering on device */
 	pci_set_master(dev);
 
-	/* Enable MSI interrupts */
-	//rc = pci_enable_msi(dev);
-	rc = pci_enable_msi_block(dev, 3);
-	printk(KERN_DEBUG "pci_enable_msi_block(dev, 3	): %d\n", rc);
-	if (rc < 0) {
-		printk(KERN_DEBUG MOD_NAME ": unable to use MSI interrupts\n");
-		board->msi_enabled = 0;
-	} else {
-		board->msi_enabled = 1;
-	}
+	/* Make sure MSI interrupts are disabled */
+	pci_disable_msi(dev);
 
 	irq_line = dev->irq;
 
@@ -221,19 +233,6 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	board->irq_line = irq_line;
 	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line);
 
-	/* Register user-logic interrupt */
-	rc = request_irq(irq_line + 1, amc_user_irq, IRQF_SHARED, MOD_NAME,
-		(void *) board);
-	rc = request_irq(irq_line + 2, amc_user_irq, IRQF_SHARED, MOD_NAME,
-		(void *) board);
-	if (rc) {
-		printk(KERN_DEBUG MOD_NAME ": Could not request IRQ #%d, error %d\n",
-		       irq_line + 1, rc);
-		board->irq_line = -1;
-		goto probe_disable_dev;
-	}
-
-	printk(KERN_DEBUG MOD_NAME ":Succesfully requested IRQ #%d\n", irq_line + 1);
 
 	/* Scan BARs */
 	for (i = 0; i < PCIE_NR_BARS; i++) {
@@ -385,8 +384,6 @@ static void remove(struct pci_dev *dev)
 		printk(KERN_DEBUG "Freeing IRQ #%d for dev_id 0x%08lx.\n",
 			board->irq_line, (unsigned long)board);
 			free_irq(board->irq_line, (void *)board);
-			free_irq(board->irq_line + 1, (void *)board);
-			free_irq(board->irq_line + 2, (void *)board);
 	}
 
 	/* Disable MSI */

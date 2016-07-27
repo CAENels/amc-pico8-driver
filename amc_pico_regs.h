@@ -34,6 +34,7 @@
 #define PICO_ADDR	(0x0)
 #define DMA_ADDR	(0x10000)
 #define MUX_ADDR	(0x20000)
+#define INTR_ADDR	(0x40000)
 
 
 /* on DMA_ADDR */
@@ -73,6 +74,15 @@
 
 #define DMA_CMD_MASK_DMA_GO	(0x80000000)
 #define DMA_CMD_MASK_GEN_IRQ	(0x08000000)
+
+
+/* on INTR */
+#define INTR_ID_OFFSET		(0x0)
+#define INTR_STATUS_OFFSET	(0x4)
+#define INTR_CONTROL_OFFSET	(0x8)
+#define INTR_LATCH_OFFSET	(0xC)
+#define INTR_CLEAR_OFFSET	(0x10)
+
 
 
 #endif /* AMC_PICO_REGS_H_ */
