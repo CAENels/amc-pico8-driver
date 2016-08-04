@@ -57,26 +57,6 @@
 # error CONFIG_PCI_MSI is required
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
-int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
-{
-    int nreq = maxvec;
-    while(nreq>=minvec) {
-        int nalloc = pci_enable_msi_block(dev, nreq);
-        dev_info(&dev->dev, "Requesting %d MSI IRQs -> %d\n", nreq, nalloc);
-        if(nalloc==0) break;
-        else if(nalloc>nreq) {
-            dev_err(&dev->dev, "pci_enable_msi_block() breaks contract %d %d\n", nreq, nalloc);
-            return -EINVAL;
-        } /* else nalloc<nreq */
-        nreq = nalloc;
-    }
-    if(nreq<=0)
-        nreq = -EINVAL;
-    return nreq;
-}
-#endif
-
 static
 int version[3] = {1, 0, 7};
 
@@ -160,13 +140,6 @@ static irqreturn_t amc_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t amc_user_isr(int irq, void *dev_id)
-{
-    struct board_data *board = (struct board_data *)dev_id;
-    dev_info(&board->pci_dev->dev, "USER IRQ\n");
-    return IRQ_HANDLED;
-}
-
 static
 int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
 {
@@ -204,24 +177,15 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
             board->kernel_mem_buf[i], (unsigned)DMA_BUF_SIZE, board->dma_buf[i]);
     }
 
-    ret = pci_enable_msi_range(dev, 1, 2);
-    ERR(ret<1, freebufs, "Failed to enable any MSI interrupts\n");
-    board->numirqs = (unsigned)ret;
-    dev_info(&dev->dev, "Acquired %u MSI IRQs\n", board->numirqs);
+    ret = pci_enable_msi(dev);
+    ERR(ret, freebufs, "Failed to enable any MSI interrupts\n");
 
     ret = request_irq(dev->irq, &amc_isr, 0, "pico_acq", board);
     ERR(ret, msidisable, "Failed to attach acquire ISR\n");
 
-    if(board->numirqs>1) {
-        ret = request_irq(dev->irq+1, &amc_user_isr, 0, "pico_user", board);
-        ERR(ret, stopirq0, "Failed to attach user ISR\n");
-    }
-
     return 0;
-//stopirq1:
-//    if(board->numirqs>1) free_irq(dev->irq+1, board);
-stopirq0:
-    free_irq(dev->irq, &board);
+//stopirq:
+//    free_irq(dev->irq, &board);
 msidisable:
     pci_disable_msi(dev);
 freebufs:
@@ -249,7 +213,6 @@ static
 int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
 {
     unsigned i;
-    if(board->numirqs>1) free_irq(dev->irq+1, board);
     free_irq(dev->irq, board);
 
     pci_disable_msi(dev);

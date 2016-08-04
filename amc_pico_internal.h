@@ -59,8 +59,7 @@ struct board_data {
 	void * __iomem bar2;
 
 	/* MSI interrupt TODO do we need this */
-	uint8_t msi_enabled;
-    unsigned numirqs;
+    uint8_t msi_enabled;
 
 	/* number of interrupts */
     uint32_t irq_count;
