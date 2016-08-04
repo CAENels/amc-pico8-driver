@@ -34,7 +34,30 @@
 #define PICO_ADDR	(0x0)
 #define DMA_ADDR	(0x10000)
 #define MUX_ADDR	(0x20000)
+#define INT_ADDR	(0x40000)
 
+/* on INT_ADDR
+ * Introduced in FW version 0x0001000b
+ */
+/* constant 0x157C5721 */
+#define INT_ID (INT_ADDR+0x0)
+#define INT_STATUS (INT_ADDR+0x4)
+/* bit indicating whether device think MSI is enabld */
+#define INT_STATUS_MSI_EN (1<<8)
+/* bit indicating whether an interrupt is latched (INT_READ is non-zero) */
+#define INT_STATUS_ACT    (1<<0)
+/* unused #define INT_CTRL (INT_ADDR+0x8) */
+/* bit mask of all interrupt sources */
+#define INT_READ (INT_ADDR+0xc)
+/* bit mask.  write to clear per interrupt source */
+#define INT_CLEAR (INT_ADDR+0x10)
+
+/* mask for both INT_READ and INT_CLEAR.
+ * HW impliments 8 bits.
+ */
+#define INT_DMA_DONE 0x1
+#define INT_USER 0x2
+#define INT_MASK (INT_DMA_DONE|INT_USER)
 
 /* on DMA_ADDR */
 #define DMA_OFFSET_STATUS	(0x0)

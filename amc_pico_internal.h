@@ -38,9 +38,11 @@
 #define DMA_BUF_SIZE		damc_dma_buf_len
 extern unsigned long damc_dma_buf_len;
 
-/** Maximal number of BARs */
-#define PCIE_NR_BARS	7
-
+enum dmac_irqmode_t {
+    dmac_irq_poll,
+    dmac_irq_level,
+    dmac_irq_msi
+};
 
 /**
  * \struct board_data
@@ -58,8 +60,7 @@ struct board_data {
 	void * __iomem bar0;
 	void * __iomem bar2;
 
-	/* MSI interrupt TODO do we need this */
-    uint8_t msi_enabled;
+    enum dmac_irqmode_t irqmode;
 
 	/* number of interrupts */
     uint32_t irq_count;

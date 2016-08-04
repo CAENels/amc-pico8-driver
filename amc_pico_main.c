@@ -67,10 +67,17 @@ struct class *damc_fmc25_class;
  * May be reduced for testing
  */
 static
-unsigned long damc_req_dma_buf_len = 4*1024*1024;
+ulong damc_req_dma_buf_len = 4*1024*1024;
 module_param_named(dma_buf_len, damc_req_dma_buf_len, ulong, 0444);
 
 unsigned long damc_dma_buf_len;
+
+/* 0 - polled  (debugging)
+ * 1 - classic PCI level IRQ
+ * 2 - PCI MSI
+ */
+uint dmac_irqmode = 2;
+module_param_named(irqmode, dmac_irqmode, uint, 0444);
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
@@ -84,60 +91,80 @@ MODULE_DEVICE_TABLE(pci, ids);
 
 static irqreturn_t amc_isr(int irq, void *dev_id)
 {
-	struct board_data *board;
-	uint32_t count = 0;
-	size_t nsent = 0;
-	unsigned long flags;
-	unsigned cycles = 0;
-	int op = 1;
+    struct board_data *board;
+    uint32_t active;
 
-	board = (struct board_data *)dev_id;
+    board = (struct board_data *)dev_id;
 
-	if (board == NULL) {
-		/* interrupt was not from this device */
-		return IRQ_NONE;
-	}
+    WARN_ONCE(board==NULL, "amc_pico ISR had board==NULL\n");
+    if (board == NULL)
+        return IRQ_NONE;
 
-    count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
+    active = ioread32(board->bar0+INT_READ);
+    if(unlikely(active&~INT_MASK)) {
+        /* Maybe some new FW feature has signaled an interrupt we don't know
+         * how to handle, and can't mask out.
+         * So clear it and hope for the best...
+         */
+        dev_warn(&board->pci_dev->dev, "Device signaling unknown IRQ %08x\n", (unsigned)active);
+    }
 
-	dev_dbg(&board->pci_dev->dev, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
+    if(!active) {
+        if (unlikely(board->irqmode==dmac_irq_msi)) {
+            dev_warn(&board->pci_dev->dev, "Spurious IRQ in MSI mode %08x\n", (unsigned)active);
+        }
+        return IRQ_NONE;
+    }
 
-	if(count==0)
-		return IRQ_NONE;
+    if(active&INT_DMA_DONE) {
+        size_t nsent = 0;
+        unsigned long flags;
+        unsigned cycles = 0;
+        int op = 1;
 
-	do {
-		if (count == 0xFFFFFFFFUL) {
-			dev_err(&board->pci_dev->dev,
-				"something wrong when reading from DMA\n");
-			break;
+        uint32_t count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
 
-		} else if (cycles++>100) {
-			dev_err(&board->pci_dev->dev, "FIFO ran away, stopping\n");
-			op = 2;
-			break;
-		}
+        dev_dbg(&board->pci_dev->dev, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
 
-        nsent += ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
-		dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
-		dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
-		dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
-            ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
+        if(count==0)
+            return IRQ_NONE;
 
-		/* pop from resp fifo */
-        iowrite32(0, board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
-		mb();
-        count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-	} while (count > 0);
+        do {
+            if (unlikely(count == 0xFFFFFFFFUL)) {
+                dev_err(&board->pci_dev->dev,
+                        "something wrong when reading from DMA\n");
+                break;
 
-	spin_lock_irqsave(&board->queue.lock, flags);
-	board->irq_flag = op;
-	board->bytes_trans = nsent;
-	wake_up_locked(&board->queue);
-	spin_unlock_irqrestore(&board->queue.lock, flags);
+            } else if (unlikely(cycles++>100)) {
+                dev_err(&board->pci_dev->dev, "FIFO ran away, stopping\n");
+                op = 2;
+                break;
+            }
 
-	dev_dbg(&board->pci_dev->dev, "ISR: waked up queue\n");
+            nsent += ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+            dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
+            dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
+            dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
+                    ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
 
-	return IRQ_HANDLED;
+            /* pop from resp fifo */
+            iowrite32(0, board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+            mb();
+            count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
+        } while (count > 0);
+
+        spin_lock_irqsave(&board->queue.lock, flags);
+        board->irq_flag = op;
+        board->bytes_trans = nsent;
+        wake_up_locked(&board->queue);
+        spin_unlock_irqrestore(&board->queue.lock, flags);
+
+        dev_dbg(&board->pci_dev->dev, "ISR: waked up queue\n");
+    }
+
+    iowrite32(active, board->bar0+INT_CLEAR);
+
+    return IRQ_HANDLED;
 }
 
 static
@@ -177,17 +204,21 @@ int pico_pci_setup(struct pci_dev *dev, struct board_data *board)
             board->kernel_mem_buf[i], (unsigned)DMA_BUF_SIZE, board->dma_buf[i]);
     }
 
-    ret = pci_enable_msi(dev);
-    ERR(ret, freebufs, "Failed to enable any MSI interrupts\n");
+    if (board->irqmode==dmac_irq_msi) {
+        ret = pci_enable_msi(dev);
+        ERR(ret, freebufs, "Failed to enable any MSI interrupts\n");
+    }
 
-    ret = request_irq(dev->irq, &amc_isr, 0, "pico_acq", board);
-    ERR(ret, msidisable, "Failed to attach acquire ISR\n");
+    if (board->irqmode!=dmac_irq_poll) {
+        ret = request_irq(dev->irq, &amc_isr, 0, "pico_acq", board);
+        ERR(ret, msidisable, "Failed to attach acquire ISR\n");
+    }
 
     return 0;
 //stopirq:
-//    free_irq(dev->irq, &board);
+//    if (board->irqmode!=dmac_irq_poll) free_irq(dev->irq, &board);
 msidisable:
-    pci_disable_msi(dev);
+    if (board->irqmode==dmac_irq_msi) pci_disable_msi(dev);
 freebufs:
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         if(!board->kernel_mem_buf[i]) continue;
@@ -213,10 +244,12 @@ static
 int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
 {
     unsigned i;
-    free_irq(dev->irq, board);
-
-    pci_disable_msi(dev);
-
+    if (board->irqmode!=dmac_irq_poll) {
+        free_irq(dev->irq, board);
+    }
+    if (board->irqmode==dmac_irq_msi) {
+        pci_disable_msi(dev);
+    }
     for (i = 0; i < DMA_BUF_COUNT; i++) {
         if(!board->kernel_mem_buf[i]) continue;
         pci_free_consistent(	dev,
@@ -310,6 +343,9 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	}
 
 	board->pci_dev = dev;
+    board->irqmode = dmac_irqmode;
+    if (board->irqmode>2)
+        board->irqmode = 2;
 
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);
