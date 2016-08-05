@@ -26,6 +26,7 @@
 #ifndef AMC_PICO_DEBUG_H_
 #define AMC_PICO_DEBUG_H_
 
+#include <linux/printk.h>
 #include "amc_pico_internal.h"
 
 #ifndef DEBUG_IRQ
@@ -48,10 +49,12 @@
 #define DEBUG_FULL	0
 #endif
 
-
+#ifdef CONFIG_DYNAMIC_DEBUG
+#define debug_print(type, fmt, args...) dynamic_pr_debug(fmt, ##args)
+#else
 #define debug_print(type, fmt, args...) \
 	do { if (type) printk(KERN_DEBUG MOD_NAME ": " fmt, ##args); } \
 	while (0);
-
+#endif
 
 #endif /* AMC_PICO_DEBUG_H_ */
