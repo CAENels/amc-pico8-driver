@@ -51,7 +51,6 @@
 #include "amc_pico.h"
 #include "amc_pico_internal.h"
 #include "amc_pico_regs.h"
-#include "amc_pico_debug.h"
 
 
 /**

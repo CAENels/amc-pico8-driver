@@ -47,7 +47,6 @@
 #include "amc_pico.h"
 #include "amc_pico_regs.h"
 #include "amc_pico_dma.h"
-#include "amc_pico_debug.h"
 #include "amc_pico_char.h"
 #include "amc_pico_bist.h"
 

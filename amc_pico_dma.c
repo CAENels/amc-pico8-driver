@@ -23,16 +23,16 @@
 void dma_push(struct board_data *dev, uint32_t address, uint32_t length, int gen_irq)
 {
 	iowrite32(address, dev->bar0 + DMA_ADDR + DMA_OFFSET_ADDR);
-	debug_print(DEBUG_DMA,  "   dma_start(): DMA address readback: %08x\n",
+    dev_dbg(&dev->pci_dev->dev,  "   dma_start(): DMA address readback: %08x\n",
 		ioread32(dev->bar0 + DMA_ADDR + DMA_OFFSET_ADDR));
 
 	iowrite32(length, dev->bar0 + DMA_ADDR + DMA_OFFSET_LEN);
-	debug_print(DEBUG_DMA,  "   dma_start(): DMA length readback: %08x\n",
+    dev_dbg(&dev->pci_dev->dev,  "   dma_start(): DMA length readback: %08x\n",
 		ioread32(dev->bar0 + DMA_ADDR + DMA_OFFSET_LEN));
 
 	/* make sure that address and length have been written */
 	mb();
-	debug_print(DEBUG_DMA,  "   dma_start(): DMA command go%s!\n",
+    dev_dbg(&dev->pci_dev->dev,  "   dma_start(): DMA command go%s!\n",
 		gen_irq ? ", gen irq" : "");
 	iowrite32(DMA_CMD_MASK_DMA_GO  | (gen_irq ? DMA_CMD_MASK_GEN_IRQ : 0 ),
 		dev->bar0 + DMA_ADDR + DMA_OFFSET_CMD);
@@ -48,8 +48,9 @@ void dma_enable(struct board_data *dev, int enable)
 
 /** Register access during DMA sometimes trigger hard lockup of device.
  *  The following is a great way to trigger this.
+ *  Resolved w/ DMA controller FW fix in Jan 2016
 	ctrl = ioread32(dev->bar0 + DMA_ADDR + DMA_OFFSET_CONTROL);
-	debug_print(DEBUG_DMA, "   dma_enable(): ctrl read: 0x%08x\n", ctrl);
+    dev_dbg(&dev->pci_dev->dev, "   dma_enable(): ctrl read: 0x%08x\n", ctrl);
  */
 }
 

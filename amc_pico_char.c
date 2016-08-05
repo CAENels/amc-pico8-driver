@@ -62,7 +62,7 @@ ssize_t char_read(
 
 	board = (struct board_data *) filp->private_data;
 
-	debug_print(DEBUG_CHAR, "  read(), count %zd\n", count);
+    dev_dbg(&board->pci_dev->dev, "  read(), count %zd\n", count);
 
     if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
@@ -70,7 +70,7 @@ ssize_t char_read(
 
 	if(board->read_in_progress) {
 		spin_unlock_irq(&board->queue.lock);
-		debug_print(DEBUG_CHAR, "  read(), concurrent read()s not allowed\n");
+        dev_dbg(&board->pci_dev->dev, "  read(), concurrent read()s not allowed\n");
 		return -EIO;
 	}
 	board->read_in_progress = 1;
@@ -121,14 +121,14 @@ ssize_t char_read(
 		board->bytes_trans = 0;
 		spin_unlock_irq(&board->queue.lock);
 
-		debug_print(DEBUG_CHAR, "  read(): interrupt failed: %d\n", rc);
+        dev_dbg(&board->pci_dev->dev, "  read(): interrupt failed: %d\n", rc);
 		return rc;
 	} else {
 		spin_unlock_irq(&board->queue.lock);
 
 		i = 0;
 		tmp_count = count;
-		debug_print(DEBUG_CHAR, "  read(): returned from sleep\n");
+        dev_dbg(&board->pci_dev->dev, "  read(): returned from sleep\n");
 		rc = 0;
 		while (tmp_count > DMA_BUF_SIZE && rc==0) {
 			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
@@ -163,15 +163,15 @@ long char_ioctl(
 )
 {
 	long ret;
-	struct board_data *board;
+    struct board_data *board = (struct board_data *) filp->private_data;
 	struct trg_ctrl trg;
 	uint32_t control = 0, scaler = 0;
 	uint8_t range = 0;
 	uint32_t rng_buf_delay = 0;
 	uint32_t ctrl_tmp;
 
-	debug_print(DEBUG_CHAR, "%s\n", __PRETTY_FUNCTION__);
-	debug_print(DEBUG_CHAR, "cmd: 0x%08x\n", cmd);
+    dev_dbg(&board->pci_dev->dev, "%s\n", __PRETTY_FUNCTION__);
+    dev_dbg(&board->pci_dev->dev, "cmd: 0x%08x\n", cmd);
 
 	/* validate cmd and copy in values from user before locking
 	 * can't access board->
@@ -180,12 +180,12 @@ long char_ioctl(
 	case SET_RANGE:
 		ret = get_user(range, (uint8_t*)arg);
 		range &= 0xFF;
-		debug_print(DEBUG_CHAR, "setting range: %01x\n", range);
+        dev_dbg(&board->pci_dev->dev, "setting range: %01x\n", range);
 		break;
 	case SET_FSAMP:
 		ret = get_user(scaler, (uint32_t*)arg);
 		if(!ret) {
-			debug_print(DEBUG_CHAR, "clock scaler: %d\n", scaler);
+            dev_dbg(&board->pci_dev->dev, "clock scaler: %d\n", scaler);
 
 			if ((scaler == 0) || scaler > PICO_CONV_MAX){
 				printk(KERN_DEBUG MOD_NAME
@@ -198,11 +198,11 @@ long char_ioctl(
 		break;
 	case SET_TRG:
 		ret = copy_from_user(&trg, (void*)arg, sizeof(trg));
-		debug_print(DEBUG_FULL, "    trg.limit: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "    trg.limit: %08x\n",
 			*(uint32_t *)&trg.limit);
-		debug_print(DEBUG_FULL, "    trg.nrsamp: %d\n", trg.nr_samp);
-		debug_print(DEBUG_FULL, "    trg.ch_sel: %d\n", trg.ch_sel);
-		debug_print(DEBUG_FULL, "    trg.mode: %s\n",
+        dev_dbg(&board->pci_dev->dev, "    trg.nrsamp: %d\n", trg.nr_samp);
+        dev_dbg(&board->pci_dev->dev, "    trg.ch_sel: %d\n", trg.ch_sel);
+        dev_dbg(&board->pci_dev->dev, "    trg.mode: %s\n",
 			(trg.mode == DISABLED ? "DISABLED" :
 			trg.mode == POS_EDGE ?  "POS_EDGE" :
 			trg.mode == NEG_EDGE ?  "NEG_EDGE" : "BOTH_EDGE"));
@@ -210,14 +210,14 @@ long char_ioctl(
 		break;
 	case SET_RING_BUF:
 		ret = get_user(rng_buf_delay, (uint32_t*)arg);
-		debug_print(DEBUG_FULL, "rng_buf_delay: %d\n", rng_buf_delay);
+        dev_dbg(&board->pci_dev->dev, "rng_buf_delay: %d\n", rng_buf_delay);
 		break;
 	case SET_GATE_MUX:
-		debug_print(DEBUG_FULL, "set gate mux: %d\n", control);
+        dev_dbg(&board->pci_dev->dev, "set gate mux: %d\n", control);
 		ret = get_user(control, (uint32_t*)arg);
 		break;
 	case SET_CONV_MUX:
-		debug_print(DEBUG_FULL, "set conv mux: %d\n", control);
+        dev_dbg(&board->pci_dev->dev, "set conv mux: %d\n", control);
 		ret = get_user(control, (uint32_t*)arg);
 		break;
 	case GET_RANGE:
@@ -232,9 +232,7 @@ long char_ioctl(
 		ret = -EINVAL;
 	}
 
-	if(ret) return ret;
-
-	board = (struct board_data *) filp->private_data;
+    if(ret) return ret;
 
 	spin_lock_irq(&board->queue.lock); /* enter critical section, can't sleep */
 
@@ -326,33 +324,33 @@ long char_ioctl(
 	/* copy to user */
 	switch (cmd) {
 	case SET_RANGE:
-		debug_print(DEBUG_CHAR, "   control reg readback: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "   control reg readback: %08x\n",
 			range);
 		break;
 	case GET_RANGE:
-		debug_print(DEBUG_CHAR, "   range: %x\n", range);
+        dev_dbg(&board->pci_dev->dev, "   range: %x\n", range);
 		ret = put_user(range, (uint8_t*)arg);
 		break;
 	case SET_FSAMP:
-		debug_print(DEBUG_CHAR, "   scaler readback: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "   scaler readback: %08x\n",
 			scaler);
 		break;
 	case GET_FSAMP:
-		debug_print(DEBUG_CHAR, "   scaler: %d", scaler);
+        dev_dbg(&board->pci_dev->dev, "   scaler: %d", scaler);
 		ret = put_user(scaler, (uint32_t*)arg);
 		break;
 	case SET_TRG:
-		debug_print(DEBUG_CHAR, "   trigger control: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "   trigger control: %08x\n",
 			(unsigned)control);
 		break;
 	case SET_RING_BUF:
 		break;
 	case SET_GATE_MUX:
-		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "cont_trg reg: %08x\n",
 			(unsigned)control);
 		break;
 	case SET_CONV_MUX:
-		debug_print(DEBUG_FULL, "cont_trg reg: %08x\n",
+        dev_dbg(&board->pci_dev->dev, "cont_trg reg: %08x\n",
 			(unsigned)control);
 		break;
 	case GET_B_TRANS:

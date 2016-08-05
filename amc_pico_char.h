@@ -37,7 +37,6 @@
 #include "amc_pico_internal.h"
 #include "amc_pico_regs.h"
 #include "amc_pico_dma.h"
-#include "amc_pico_debug.h"
 
 extern const struct file_operations amc_pico_fops;
 

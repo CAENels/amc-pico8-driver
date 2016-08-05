@@ -25,6 +25,8 @@
 #include <linux/spinlock.h>
 #include <linux/cdev.h>
 #include <linux/irqreturn.h>
+#include <linux/device.h>
+#include <linux/pci.h>
 
 #include "amc_pico.h"
 
