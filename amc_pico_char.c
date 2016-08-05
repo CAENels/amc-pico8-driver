@@ -87,7 +87,28 @@ ssize_t char_read(
 	mb();
 	dma_enable(board, 1);
 
-	rc = wait_event_interruptible_locked_irq(board->queue, board->irq_flag!=0);
+    if (likely(board->irqmode!=dmac_irq_poll)) {
+        rc = wait_event_interruptible_locked_irq(board->queue, board->irq_flag!=0);
+
+    } else {
+        const unsigned long twait = msecs_to_jiffies(1);
+        do {
+            spin_unlock_irq(&board->queue.lock);
+            /* must unlock for call to amc_isr() as spin locks aren't recursive */
+            if(amc_isr(board->pci_dev->irq, board)==IRQ_NONE)
+                rc = wait_event_interruptible_timeout(board->queue, board->irq_flag!=0, twait);
+            else
+                rc = 0;
+            spin_lock_irq(&board->queue.lock);
+            /* continue while no "IRQ" signaled, and wait not interrupted */
+        } while(board->irq_flag==0 && rc>=0);
+        if(rc>0) rc=0;
+    }
+    /*
+     * irq_flag==1 && rc==0 is normal completion
+     * rc==-ERESTARTSYS is user abort
+     * other cases not to happen, but are treated as -ECANCELED
+     */
 
 	cond = board->irq_flag;
 	board->irq_flag = 0;

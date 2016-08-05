@@ -89,7 +89,7 @@ static const struct pci_device_id ids[] = {
 
 MODULE_DEVICE_TABLE(pci, ids);
 
-static irqreturn_t amc_isr(int irq, void *dev_id)
+irqreturn_t amc_isr(int irq, void *dev_id)
 {
     struct board_data *board;
     uint32_t active;

@@ -24,6 +24,7 @@
 
 #include <linux/spinlock.h>
 #include <linux/cdev.h>
+#include <linux/irqreturn.h>
 
 #include "amc_pico.h"
 
@@ -37,6 +38,8 @@
 /** Buffer size allocated (should be <= 4MB) */
 #define DMA_BUF_SIZE		damc_dma_buf_len
 extern unsigned long damc_dma_buf_len;
+
+irqreturn_t amc_isr(int irq, void *dev_id);
 
 enum dmac_irqmode_t {
     dmac_irq_poll,
