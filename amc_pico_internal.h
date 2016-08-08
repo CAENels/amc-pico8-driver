@@ -83,10 +83,9 @@ struct board_data {
 	dma_addr_t dma_buf[DMA_BUF_COUNT];
 
 	unsigned read_in_progress;
-	wait_queue_head_t queue;
-	unsigned irq_flag;
-
-	uint32_t bytes_trans;
+    wait_queue_head_t dma_queue;
+    unsigned dma_irq_flag;
+    uint32_t dma_bytes_trans;
 };
 
 #endif /* AMC_PICO_INTERNAL_H_ */

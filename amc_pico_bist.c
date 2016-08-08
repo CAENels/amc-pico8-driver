@@ -51,12 +51,12 @@ int BIST(struct pci_dev *dev)
 	iowrite32(1, board->bar0 + MUX_ADDR);
 
 	/* DMA transfer */
-	board->irq_flag = 0;
+    board->dma_irq_flag = 0;
 	t0 = ktime_get();
 	dma_enable(board, 0);
 	dma_push(board, tmp_buf_dma, buf_size, 1);
 	dma_enable(board, 1);
-	rc = wait_event_interruptible_timeout(board->queue, board->irq_flag != 0,
+    rc = wait_event_interruptible_timeout(board->dma_queue, board->dma_irq_flag != 0,
 		msecs_to_jiffies(1000));
 	t1 = ktime_get();
 
@@ -68,7 +68,7 @@ int BIST(struct pci_dev *dev)
 	}
 
 	dma_enable(board, 0);
-	board->irq_flag = 0;
+    board->dma_irq_flag = 0;
 
 	if (rc <= 0) {
 		dev_err(&dev->dev, "DMA was unable to finish\n");

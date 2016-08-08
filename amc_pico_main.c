@@ -152,13 +152,13 @@ irqreturn_t amc_isr(int irq, void *dev_id)
             count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
         } while (count > 0);
 
-        spin_lock_irqsave(&board->queue.lock, flags);
-        board->irq_flag = op;
-        board->bytes_trans = nsent;
-        wake_up_locked(&board->queue);
-        spin_unlock_irqrestore(&board->queue.lock, flags);
+        spin_lock_irqsave(&board->dma_queue.lock, flags);
+        board->dma_irq_flag = op;
+        board->dma_bytes_trans = nsent;
+        wake_up_locked(&board->dma_queue);
+        spin_unlock_irqrestore(&board->dma_queue.lock, flags);
 
-        dev_dbg(&board->pci_dev->dev, "ISR: waked up queue\n");
+        dev_dbg(&board->pci_dev->dev, "ISR: waked up dma_queue\n");
     }
 
     iowrite32(active, board->bar0+INT_CLEAR);
@@ -269,12 +269,12 @@ int pico_pci_cleanup(struct pci_dev *dev, struct board_data *board)
 static
 void pico_wait_for_op(struct board_data *board)
 {
-    spin_lock_irq(&board->queue.lock);
+    spin_lock_irq(&board->dma_queue.lock);
     if(board->read_in_progress) {
-        board->irq_flag = 2;
-        wake_up_locked(&board->queue);
+        board->dma_irq_flag = 2;
+        wake_up_locked(&board->dma_queue);
     }
-    spin_unlock_irq(&board->queue.lock);
+    spin_unlock_irq(&board->dma_queue.lock);
 }
 
 static
@@ -349,7 +349,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);
 
-	init_waitqueue_head(&board->queue);
+    init_waitqueue_head(&board->dma_queue);
 
     ret = pico_pci_setup(dev, board);
     if(!ret) {

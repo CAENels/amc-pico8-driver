@@ -66,10 +66,10 @@ ssize_t char_read(
 
     if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
-    spin_lock_irq(&board->queue.lock);
+    spin_lock_irq(&board->dma_queue.lock);
 
 	if(board->read_in_progress) {
-		spin_unlock_irq(&board->queue.lock);
+        spin_unlock_irq(&board->dma_queue.lock);
         dev_dbg(&board->pci_dev->dev, "  read(), concurrent read()s not allowed\n");
 		return -EIO;
 	}
@@ -88,43 +88,43 @@ ssize_t char_read(
 	dma_enable(board, 1);
 
     if (likely(board->irqmode!=dmac_irq_poll)) {
-        rc = wait_event_interruptible_locked_irq(board->queue, board->irq_flag!=0);
+        rc = wait_event_interruptible_locked_irq(board->dma_queue, board->dma_irq_flag!=0);
 
     } else {
         const unsigned long twait = msecs_to_jiffies(1);
         do {
-            spin_unlock_irq(&board->queue.lock);
+            spin_unlock_irq(&board->dma_queue.lock);
             /* must unlock for call to amc_isr() as spin locks aren't recursive */
             if(amc_isr(board->pci_dev->irq, board)==IRQ_NONE)
-                rc = wait_event_interruptible_timeout(board->queue, board->irq_flag!=0, twait);
+                rc = wait_event_interruptible_timeout(board->dma_queue, board->dma_irq_flag!=0, twait);
             else
                 rc = 0;
-            spin_lock_irq(&board->queue.lock);
+            spin_lock_irq(&board->dma_queue.lock);
             /* continue while no "IRQ" signaled, and wait not interrupted */
-        } while(board->irq_flag==0 && rc>=0);
+        } while(board->dma_irq_flag==0 && rc>=0);
         if(rc>0) rc=0;
     }
     /*
-     * irq_flag==1 && rc==0 is normal completion
+     * dma_irq_flag==1 && rc==0 is normal completion
      * rc==-ERESTARTSYS is user abort
      * other cases not to happen, but are treated as -ECANCELED
      */
 
-	cond = board->irq_flag;
-	board->irq_flag = 0;
+    cond = board->dma_irq_flag;
+    board->dma_irq_flag = 0;
 	board->read_in_progress = 0;
 
 	if (rc != 0 || cond!=1) { /* interrupted or aborted */
 		if(cond!=1) rc = -ECANCELED;
 		/* reset DMA engine */
 		dma_reset(board);
-		board->bytes_trans = 0;
-		spin_unlock_irq(&board->queue.lock);
+        board->dma_bytes_trans = 0;
+        spin_unlock_irq(&board->dma_queue.lock);
 
         dev_dbg(&board->pci_dev->dev, "  read(): interrupt failed: %d\n", rc);
 		return rc;
 	} else {
-		spin_unlock_irq(&board->queue.lock);
+        spin_unlock_irq(&board->dma_queue.lock);
 
 		i = 0;
 		tmp_count = count;
@@ -234,7 +234,7 @@ long char_ioctl(
 
     if(ret) return ret;
 
-	spin_lock_irq(&board->queue.lock); /* enter critical section, can't sleep */
+    spin_lock_irq(&board->dma_queue.lock); /* enter critical section, can't sleep */
 
 	switch (cmd) {
 	case SET_RANGE:
@@ -259,7 +259,7 @@ long char_ioctl(
 		break;
 
 	case GET_B_TRANS:
-		control = board->bytes_trans;
+        control = board->dma_bytes_trans;
 		break;
 
 	case SET_TRG:
@@ -312,14 +312,14 @@ long char_ioctl(
 		break;
 
 	case ABORT_READ:
-		board->irq_flag = 2;
-		wake_up_locked(&board->queue);
+        board->dma_irq_flag = 2;
+        wake_up_locked(&board->dma_queue);
 
 	default:
 		break;
 	}
 
-	spin_unlock_irq(&board->queue.lock); /* end of critical section, can't access board-> */
+    spin_unlock_irq(&board->dma_queue.lock); /* end of critical section, can't access board-> */
 
 	/* copy to user */
 	switch (cmd) {
