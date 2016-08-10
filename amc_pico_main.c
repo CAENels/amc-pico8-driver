@@ -49,6 +49,7 @@
 #include "amc_pico_dma.h"
 #include "amc_pico_char.h"
 #include "amc_pico_bist.h"
+#include "amc_pico_version.h"
 
 #define DRV_NAME "AMC-Pico8 Driver"
 
@@ -84,8 +85,8 @@ module_param_named(irqmode, dmac_irqmode, uint, 0444);
 /* select source of site specific FW customization. */
 static
 char *dmac_site_name =
-#ifdef USER_FRIB
-        "frib"
+#ifdef CONFIG_AMC_PICO_SITE_DEFAULT
+        CONFIG_AMC_PICO_SITE_DEFAULT
 #else
         NULL
 #endif
@@ -178,7 +179,7 @@ irqreturn_t amc_isr(int irq, void *dev_id)
     }
     if(active&INT_USER) {
         if(0) {}
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
         else if(dmac_site==USER_SITE_FRIB) {
             /* TODO: Note, being sloppy with locking here
              *  Not sure how to guard this since can't copy_to_user()
@@ -401,7 +402,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             pico_pci_cleanup(dev, board);
         }
     }
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     if(dmac_site==USER_SITE_FRIB) {
         init_waitqueue_head(&board->capture_queue);
 
@@ -425,7 +426,7 @@ static void remove(struct pci_dev *dev)
 {
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     kfree(board->capture_buf);
 #endif
 	dev_info(&dev->dev, " remove()\n");
@@ -478,7 +479,7 @@ static int __init damc_fmc25_pcie_init(void)
 
     if(!dmac_site_name || dmac_site_name[0]=='\0' || strcmp(dmac_site_name, "caen")==0) {
         dmac_site = USER_SITE_NONE;
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     } else if(strcmp(dmac_site_name, "frib")==0) {
         dmac_site = USER_SITE_FRIB;
 #endif
@@ -493,9 +494,16 @@ static int __init damc_fmc25_pcie_init(void)
 	printk(KERN_DEBUG "              CAEN ELS AMC-PICO8               \n");
 	printk(KERN_DEBUG "               version: %d.%d.%d               \n",
 		version[0], version[1], version[2]);
-	printk(KERN_DEBUG MOD_NAME " init(), built at "
-		__DATE__ " " __TIME__ "\n");
-	printk(KERN_DEBUG "===============================================\n");
+    printk(KERN_DEBUG MOD_NAME " init(), built " AMC_PICO_VERSION "\n");
+#ifdef CONFIG_AMC_PICO_FRIB
+    printk(KERN_DEBUG "Includes \"frib\" site FW support.\n");
+#endif
+#ifdef CONFIG_AMC_PICO_SITE_DEFAULT
+    printk(KERN_DEBUG "Defaults to " CONFIG_AMC_PICO_SITE_DEFAULT " site\n");
+#endif
+    if(dmac_site!=USER_SITE_NONE)
+        printk(KERN_DEBUG "Enabling site mods for \"%s\"\n", dmac_site_name);
+    printk(KERN_DEBUG "===============================================\n");
 
 	print_all_ioctls();
 

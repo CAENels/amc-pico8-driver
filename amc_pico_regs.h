@@ -26,9 +26,6 @@
 #ifndef AMC_PICO_REGS_H_
 #define AMC_PICO_REGS_H_
 
-/* enable FRIB local customizations */
-#define USER_FRIB
-
 #define AMC_PICO_SUBVENDOR_ID	(0xCAE2)
 #define AMC_PICO_SUBDEVICE_ID	(0x71C0)
 
@@ -102,7 +99,7 @@
 
 /** Registers specific to FRIB local firmware.
  */
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
 
 #define FRIB_CAP_START 0x40
 #define FRIB_CAP_COUNT (0x6c-0x40)
@@ -118,6 +115,6 @@
 #define USR_TRP_SEC  (USER_ADDR+4*0x18)
 #define USR_TRP_FRAC (USER_ADDR+4*0x19)
 
-#endif /* USER_FRIB */
+#endif /* CONFIG_AMC_PICO_FRIB */
 
 #endif /* AMC_PICO_REGS_H_ */

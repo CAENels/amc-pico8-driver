@@ -90,7 +90,7 @@ struct board_data {
     unsigned dma_irq_flag;
     uint32_t dma_bytes_trans;
 
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     unsigned capture_ready;
     unsigned capture_length;
     uint32_t *capture_buf;

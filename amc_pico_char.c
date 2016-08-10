@@ -58,7 +58,7 @@ int char_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
 static ssize_t frib_write_reg(struct board_data *board,
                              const char __user *buf,
                              size_t count,
@@ -89,7 +89,7 @@ ssize_t char_read(
 
     dev_dbg(&board->pci_dev->dev, "  read(), count %zd\n", count);
     if(0) {}
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     else if(dmac_site==USER_SITE_FRIB) {
         switch(fdata->site_mode) {
         case 0:  break;
@@ -269,7 +269,7 @@ long char_ioctl(
     {
         uint32_t sver;
         switch(dmac_site) {
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
         case USER_SITE_FRIB: sver = 0; break;
 #endif
         default: sver = 0;
@@ -278,7 +278,7 @@ long char_ioctl(
     }
     case SET_SITE_MODE:
         if(0) {}
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
         else if(dmac_site==USER_SITE_FRIB) {
             if(uval.u32>2) return -EINVAL;
         }
@@ -389,7 +389,7 @@ long char_ioctl(
 
     spin_unlock_irq(&board->dma_queue.lock); /* end of critical section, can't access board-> */
 
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     if(cmd==ABORT_READ) {
         /* abort any waiting for capture buffer */
         spin_lock_irq(&board->capture_queue.lock);
@@ -412,8 +412,9 @@ ssize_t char_write(struct file *filp, const char __user *buf, size_t count, loff
 {
     struct file_data *fdata = (struct file_data *)filp->private_data;
     struct board_data *board = fdata->board;
+    (void)board;
     if(0) {}
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
     else if(dmac_site==USER_SITE_FRIB) {
         switch(fdata->site_mode) {
         case 1:  return frib_write_reg(board, buf, count, pos);
@@ -434,7 +435,7 @@ const struct file_operations amc_pico_fops = {
 	.unlocked_ioctl = char_ioctl
 };
 
-#ifdef USER_FRIB
+#ifdef CONFIG_AMC_PICO_FRIB
 
 static ssize_t frib_write_reg(struct board_data *board,
                              const char __user *buf,
