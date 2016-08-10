@@ -26,15 +26,24 @@ KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 PERL := perl
 
-all: modules
+all: modules gen_py test/picodefs.py
 
-modules_install modules:
-	$(PERL) genVersionHeader.pl -t $(PWD) -N AMC_PICO_VERSION $(PWD)/amc_pico_version.h
+modules_install modules: amc_pico_version.h
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 	rm -f amc_pico_version.h
+	rm -f gen_py
+
+gen_py: gen_py.c amc_pico.h amc_pico_version.h
+	$(CC) -o $@ -g -Wall $<
+
+amc_pico_version.h::
+	$(PERL) genVersionHeader.pl -t $(PWD)/.. -N AMC_PICO_VERSION $(PWD)/amc_pico_version.h
+
+test/picodefs.py: gen_py
+	./$< $@
 
 .PHONY: all modules_install modules clean
 
