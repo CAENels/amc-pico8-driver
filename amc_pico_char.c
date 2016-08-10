@@ -421,12 +421,45 @@ ssize_t char_write(struct file *filp, const char __user *buf, size_t count, loff
         return -EINVAL;
 }
 
+static
+loff_t char_llseek(struct file *filp, loff_t pos, int whence)
+{
+    struct file_data *fdata = (struct file_data *)filp->private_data;
+    struct board_data *board = fdata->board;
+    loff_t npos;
+    (void)board;
+
+    if(dmac_site!=USER_SITE_FRIB || fdata->site_mode==0)
+        return -EINVAL;
+#ifdef CONFIG_AMC_PICO_FRIB
+
+    switch(whence) {
+    case 0: npos = pos; break;
+    case 1: npos = filp->f_pos + pos; break;
+    case 2: npos = 0x40000 + pos; break;
+    default: return -EINVAL;
+    }
+
+    if(npos<0)
+        return -EINVAL;
+    else if(npos>0x40000)
+        npos = 0x40000;
+
+    filp->f_pos = npos;
+    return npos;
+
+#else
+    return -EINVAL;
+#endif
+}
+
 const struct file_operations amc_pico_fops = {
 	.owner		= THIS_MODULE,
 	.open		= char_open,
 	.release	= char_release,
 	.read		= char_read,
     .write      = char_write,
+    .llseek     = char_llseek,
 	.unlocked_ioctl = char_ioctl
 };
 
