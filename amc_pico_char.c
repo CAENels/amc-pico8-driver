@@ -32,7 +32,7 @@ int char_open(struct inode *inode, struct file *file)
 	if (!try_module_get(THIS_MODULE))
 		return -ENODEV;
 
-    fdata = kmalloc(sizeof(*fdata), GFP_KERNEL);
+    fdata = kzalloc(sizeof(*fdata), GFP_KERNEL);
     if(!fdata) {
         module_put(THIS_MODULE);
         return -ENOMEM;
@@ -87,7 +87,7 @@ ssize_t char_read(
 	size_t tmp_count;
 	int i;
 
-    dev_dbg(&board->pci_dev->dev, "  read(), count %zd\n", count);
+    dev_dbg(&board->pci_dev->dev, "  read(), site_mode=%u count %zd\n", fdata->site_mode, count);
     if(0) {}
 #ifdef CONFIG_AMC_PICO_FRIB
     else if(dmac_site==USER_SITE_FRIB) {
@@ -211,23 +211,18 @@ long char_ioctl(
 	long ret;
     struct file_data *fdata = (struct file_data *)filp->private_data;
     struct board_data *board = fdata->board;
+    size_t tocpy = sizeof(uval);
+
+    /* copy some bytes to/from user space, others are zero'd */
+    memset(&uval, 0, sizeof(uval));
+    if(_IOC_SIZE(cmd)<sizeof(uval))
+        tocpy = _IOC_SIZE(cmd);
 
     dev_dbg(&board->pci_dev->dev, "%s: 0x%08x\n", __PRETTY_FUNCTION__, cmd);
 
-    if(_IOC_SIZE(cmd)>sizeof(uval)) {
-        /* as IOCTL codes haven't been validated this could
-         * also be triggered by someone playing games
-         */
-        dev_err(&board->pci_dev->dev, "oops, logic error w/ ioctl sizes %u %u\n",
-                (unsigned)_IOC_SIZE(cmd), (unsigned)sizeof(uval));
-        return -EINVAL;
-    }
-
-    memset(&uval, 0, sizeof(uval));
-
     if(_IOC_DIR(cmd)&_IOC_WRITE) {
         /* copy in all provided bytes. based on IOCTL code. */
-        ret = copy_from_user(&uval, (void*)arg, _IOC_SIZE(cmd));
+        ret = copy_from_user(&uval, (void*)arg, tocpy);
         if(ret) return ret;
     }
 
@@ -400,7 +395,7 @@ long char_ioctl(
 #endif
 
     if(_IOC_DIR(cmd)&_IOC_READ) {
-        ret = copy_to_user((void*)arg, &uval, _IOC_SIZE(cmd));
+        ret = copy_to_user((void*)arg, &uval, tocpy);
         if(ret) return ret;
     }
 

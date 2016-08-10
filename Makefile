@@ -11,7 +11,7 @@ amc_pico-objs += amc_pico_char.o
 amc_pico-objs += amc_pico_dma.o
 
 # This is a no-op when dynamic debugging is enabled.  See README
-ccflags-$(CONFIG_AMC_PICO_DEBUG) += -DDEBUG_SYS=1 -DDEBUG_CHAR=1 -DDEBUG_DMA=1 -DDEBUG_IRQ=1 -DDEBUG_FULL=1
+ccflags-$(CONFIG_AMC_PICO_DEBUG) += -DDEBUG -DDEBUG_SYS=1 -DDEBUG_CHAR=1 -DDEBUG_DMA=1 -DDEBUG_IRQ=1 -DDEBUG_FULL=1
 
 ccflags-$(CONFIG_AMC_PICO_FRIB) += -DCONFIG_AMC_PICO_FRIB 
 

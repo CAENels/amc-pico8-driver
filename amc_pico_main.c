@@ -181,6 +181,7 @@ irqreturn_t amc_isr(int irq, void *dev_id)
         if(0) {}
 #ifdef CONFIG_AMC_PICO_FRIB
         else if(dmac_site==USER_SITE_FRIB) {
+            unsigned long flags;
             /* TODO: Note, being sloppy with locking here
              *  Not sure how to guard this since can't copy_to_user()
              *  with spinlock held.
@@ -190,10 +191,10 @@ irqreturn_t amc_isr(int irq, void *dev_id)
             for(i=0; i<board->capture_length; i++) {
                 *buf++ = ioread32(board->bar0 + USER_ADDR + FRIB_CAP_START + 4*i);
             }
-            spin_lock_irq(&board->capture_queue.lock);
+            spin_lock_irqsave(&board->capture_queue.lock, flags);
             board->capture_ready = 1;
             wake_up_locked(&board->capture_queue);
-            spin_unlock_irq(&board->capture_queue.lock);
+            spin_unlock_irqrestore(&board->capture_queue.lock, flags);
         }
 #endif
     }
