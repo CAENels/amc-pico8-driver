@@ -46,46 +46,56 @@ struct __attribute__((__packed__)) trg_ctrl {
 };
 
 /* Driver interface version number.
- * Currently 1.
+ * GET_VERSION_CURRENT is current version.
  * Initialize integer w/ zero to identify version zero interface
- * which does not fail unknown requests.
+ * which does not fail unknown requests (errno==EINVAL implies version zero)
  @code
   int ver = 0;
   ioctl(fd, GET_VERSION, &ver);
+  if(ver!=GET_VERSION_CURRENT) { oops ... }
  @endcode
  */
 #define GET_VERSION	_IOR(AMC_PICO_MAGIC, 10, uint32_t*)
+#define GET_VERSION_CURRENT 2
 
 /** Sets the picoammeter range, each bit sets the individual channel,
  * RNG0 is the higher current range
  */
-#define SET_RANGE	_IOW(AMC_PICO_MAGIC, 11, uint8_t*)
+#define SET_RANGE	_IOWR(AMC_PICO_MAGIC, 11, uint8_t*)
 
 /** Gets picoammeter range */
-#define GET_RANGE	_IOR(AMC_PICO_MAGIC, 11, uint8_t*)
+#define GET_RANGE	_IOR(AMC_PICO_MAGIC, 14, uint8_t*)
 
 /** Sets the picoammeter sampling frequency (in Hz) */
-#define SET_FSAMP	_IOW(AMC_PICO_MAGIC, 12, uint32_t*)
+#define SET_FSAMP	_IOWR(AMC_PICO_MAGIC, 12, uint32_t*)
 
 /** Gets the picoammeter sampling frequency (in Hz) */
-#define GET_FSAMP	_IOR(AMC_PICO_MAGIC, 12, uint32_t*)
+#define GET_FSAMP	_IOR(AMC_PICO_MAGIC, 13, uint32_t*)
 
 /** Gets number of bytes last DMA transfer succesfully transfered */
 #define GET_B_TRANS	_IOR(AMC_PICO_MAGIC, 40, uint32_t*)
 
 /** Sets trigger parameters */
-#define SET_TRG		_IOW(AMC_PICO_MAGIC, 50, struct trg_ctrl *)
+#define SET_TRG		_IOWR(AMC_PICO_MAGIC, 50, struct trg_ctrl *)
 
 /** Sets ring buffer (pre-trigger storage) parameters */
 #define SET_RING_BUF	_IOW(AMC_PICO_MAGIC, 60,  uint32_t*)
 
 /** Sets gate mux */
-#define SET_GATE_MUX	_IOW(AMC_PICO_MAGIC, 70,  uint32_t*)
+#define SET_GATE_MUX	_IOWR(AMC_PICO_MAGIC, 70,  uint32_t*)
 
 /** Sets convert signal mux */
-#define SET_CONV_MUX	_IOW(AMC_PICO_MAGIC, 80,  uint32_t*)
+#define SET_CONV_MUX	_IOWR(AMC_PICO_MAGIC, 80,  uint32_t*)
 
 /** Abort in progress read() w/o closing FD */
-#define ABORT_READ _IOW(AMC_PICO_MAGIC, 81, int)
+#define ABORT_READ _IO(AMC_PICO_MAGIC, 81)
+
+#define USER_SITE_NONE 0xcae4
+#define USER_SITE_FRIB 0xf41B
+
+/** Identify user/site firmware customization */
+#define GET_SITE_ID _IOR(AMC_PICO_MAGIC, 91, uint32_t*)
+#define GET_SITE_VERSION _IOR(AMC_PICO_MAGIC, 92, uint32_t*)
+#define SET_SITE_MODE _IOW(AMC_PICO_MAGIC, 92, uint32_t*)
 
 #endif /* AMC_PICO_H_ */

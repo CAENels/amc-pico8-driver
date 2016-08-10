@@ -29,6 +29,7 @@
 #include <linux/pci.h>
 
 #include "amc_pico.h"
+#include "amc_pico_regs.h"
 
 
 /** Driver name (shows in lsmod and dmesg) */
@@ -40,6 +41,8 @@
 /** Buffer size allocated (should be <= 4MB) */
 #define DMA_BUF_SIZE		damc_dma_buf_len
 extern unsigned long damc_dma_buf_len;
+
+extern uint32_t dmac_site;
 
 irqreturn_t amc_isr(int irq, void *dev_id);
 
@@ -86,6 +89,13 @@ struct board_data {
     wait_queue_head_t dma_queue;
     unsigned dma_irq_flag;
     uint32_t dma_bytes_trans;
+
+#ifdef USER_FRIB
+    unsigned capture_ready;
+    unsigned capture_length;
+    uint32_t *capture_buf;
+    wait_queue_head_t capture_queue;
+#endif
 };
 
 #endif /* AMC_PICO_INTERNAL_H_ */

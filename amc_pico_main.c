@@ -63,7 +63,10 @@ static
 struct class *damc_fmc25_class;
 
 /* allow DMA buffer size to be selected at load time.
- * May be reduced for testing
+ * May be reduced for testing.
+ * Increasing this will at some point cause allocation failures
+ * in probe().
+ * The limit will be host specific.
  */
 static
 ulong damc_req_dma_buf_len = 4*1024*1024;
@@ -77,6 +80,19 @@ unsigned long damc_dma_buf_len;
  */
 uint dmac_irqmode = 2;
 module_param_named(irqmode, dmac_irqmode, uint, 0444);
+
+/* select source of site specific FW customization. */
+static
+char *dmac_site_name =
+#ifdef USER_FRIB
+        "frib"
+#else
+        NULL
+#endif
+        ;
+uint32_t dmac_site;
+module_param_named(site, dmac_site_name, charp, 0444);
+
 
 /** List of devices this driver recognizes */
 static const struct pci_device_id ids[] = {
@@ -159,6 +175,26 @@ irqreturn_t amc_isr(int irq, void *dev_id)
         spin_unlock_irqrestore(&board->dma_queue.lock, flags);
 
         dev_dbg(&board->pci_dev->dev, "ISR: waked up dma_queue\n");
+    }
+    if(active&INT_USER) {
+        if(0) {}
+#ifdef USER_FRIB
+        else if(dmac_site==USER_SITE_FRIB) {
+            /* TODO: Note, being sloppy with locking here
+             *  Not sure how to guard this since can't copy_to_user()
+             *  with spinlock held.
+             */
+            uint32_t *buf = board->capture_buf;
+            unsigned i;
+            for(i=0; i<board->capture_length; i++) {
+                *buf++ = ioread32(board->bar0 + USER_ADDR + FRIB_CAP_START + 4*i);
+            }
+            spin_lock_irq(&board->capture_queue.lock);
+            board->capture_ready = 1;
+            wake_up_locked(&board->capture_queue);
+            spin_unlock_irq(&board->capture_queue.lock);
+        }
+#endif
     }
 
     iowrite32(active, board->bar0+INT_CLEAR);
@@ -365,6 +401,18 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             pico_pci_cleanup(dev, board);
         }
     }
+#ifdef USER_FRIB
+    if(dmac_site==USER_SITE_FRIB) {
+        init_waitqueue_head(&board->capture_queue);
+
+        board->capture_length = (0x6c-0x40)*4;
+        board->capture_buf = kmalloc(4*board->capture_length, GFP_KERNEL);
+        if(!board->capture_buf) {
+            board->capture_length = 0;
+            dev_err(&dev->dev, "FRIB capture buffer alloc fails.  Capture disabled.\n");
+        }
+    }
+#endif
     return ret;
 }
 
@@ -377,6 +425,9 @@ static void remove(struct pci_dev *dev)
 {
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
+#ifdef USER_FRIB
+    kfree(board->capture_buf);
+#endif
 	dev_info(&dev->dev, " remove()\n");
     pico_cdev_cleanup(dev, board);
     pico_pci_cleanup(dev, board);
@@ -424,6 +475,17 @@ void print_all_ioctls(void){
 static int __init damc_fmc25_pcie_init(void)
 {
 	int rc = 0;
+
+    if(!dmac_site_name || dmac_site_name[0]=='\0' || strcmp(dmac_site_name, "caen")==0) {
+        dmac_site = USER_SITE_NONE;
+#ifdef USER_FRIB
+    } else if(strcmp(dmac_site_name, "frib")==0) {
+        dmac_site = USER_SITE_FRIB;
+#endif
+    } else {
+        printk(KERN_ERR "amc_pico has not site '%s'\n", dmac_site_name);
+        return -EINVAL;
+    }
 
 	damc_dma_buf_len = damc_req_dma_buf_len;
 

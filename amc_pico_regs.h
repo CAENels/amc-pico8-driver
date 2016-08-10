@@ -26,6 +26,8 @@
 #ifndef AMC_PICO_REGS_H_
 #define AMC_PICO_REGS_H_
 
+/* enable FRIB local customizations */
+#define USER_FRIB
 
 #define AMC_PICO_SUBVENDOR_ID	(0xCAE2)
 #define AMC_PICO_SUBDEVICE_ID	(0x71C0)
@@ -34,6 +36,7 @@
 #define PICO_ADDR	(0x0)
 #define DMA_ADDR	(0x10000)
 #define MUX_ADDR	(0x20000)
+#define USER_ADDR   (0x30000)
 #define INT_ADDR	(0x40000)
 
 /* on INT_ADDR
@@ -97,5 +100,24 @@
 #define DMA_CMD_MASK_DMA_GO	(0x80000000)
 #define DMA_CMD_MASK_GEN_IRQ	(0x08000000)
 
+/** Registers specific to FRIB local firmware.
+ */
+#ifdef USER_FRIB
+
+#define FRIB_CAP_START 0x40
+#define FRIB_CAP_COUNT (0x6c-0x40)
+
+#define USR_VERSION  (USER_ADDR+4*0x10)
+#define USR_CONFIG   (USER_ADDR+4*0x11)
+#define USR_DSELECT  (USER_ADDR+4*0x12)
+#define USR_EVRCOMM  (USER_ADDR+4*0x13)
+#define USR_CUR_SEC  (USER_ADDR+4*0x14)
+#define USR_CUR_FRAC (USER_ADDR+4*0x15)
+#define USR_FPS_SRC  (USER_ADDR+4*0x16)
+#define USR_FPS_STS  (USER_ADDR+4*0x17)
+#define USR_TRP_SEC  (USER_ADDR+4*0x18)
+#define USR_TRP_FRAC (USER_ADDR+4*0x19)
+
+#endif /* USER_FRIB */
 
 #endif /* AMC_PICO_REGS_H_ */

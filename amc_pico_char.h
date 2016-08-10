@@ -40,4 +40,10 @@
 
 extern const struct file_operations amc_pico_fops;
 
+struct file_data {
+    struct board_data *board;
+
+    unsigned site_mode;
+};
+
 #endif /* AMC_PICO_CHAR_H_ */

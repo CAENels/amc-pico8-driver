@@ -24,6 +24,7 @@
 static
 int char_open(struct inode *inode, struct file *file)
 {
+    struct file_data *fdata;
 	struct board_data *board = container_of(inode->i_cdev, struct board_data, cdev);
 
 	dev_dbg(&board->pci_dev->dev, "char_open()\n");
@@ -31,7 +32,14 @@ int char_open(struct inode *inode, struct file *file)
 	if (!try_module_get(THIS_MODULE))
 		return -ENODEV;
 
-	file->private_data = board;
+    fdata = kmalloc(sizeof(*fdata), GFP_KERNEL);
+    if(!fdata) {
+        module_put(THIS_MODULE);
+        return -ENOMEM;
+    }
+    fdata->board = board;
+
+    file->private_data = fdata;
 
 	return 0;
 }
@@ -39,13 +47,31 @@ int char_open(struct inode *inode, struct file *file)
 static
 int char_release(struct inode *inode, struct file *file)
 {
+    struct file_data *fdata = (struct file_data *)file->private_data;
 	struct board_data *board = container_of(inode->i_cdev, struct board_data, cdev);
 
 	dev_dbg(&board->pci_dev->dev, "char_release()\n");
 
+    kfree(fdata);
+
 	module_put(THIS_MODULE);
 	return 0;
 }
+
+#ifdef USER_FRIB
+static ssize_t frib_write_reg(struct board_data *board,
+                             const char __user *buf,
+                             size_t count,
+                             loff_t *pos);
+static ssize_t frib_read_reg(struct board_data *board,
+                             char __user *buf,
+                             size_t count,
+                             loff_t *pos);
+static ssize_t frib_read_capture(struct board_data *board,
+                                 char __user *buf,
+                                 size_t count,
+                                 loff_t *pos);
+#endif
 
 static
 ssize_t char_read(
@@ -55,14 +81,26 @@ ssize_t char_read(
 	loff_t *pos
 )
 {
-	struct board_data *board;
+    struct file_data *fdata = (struct file_data *)filp->private_data;
+    struct board_data *board = fdata->board;
 	int rc, cond;
 	size_t tmp_count;
 	int i;
 
-	board = (struct board_data *) filp->private_data;
-
     dev_dbg(&board->pci_dev->dev, "  read(), count %zd\n", count);
+    if(0) {}
+#ifdef USER_FRIB
+    else if(dmac_site==USER_SITE_FRIB) {
+        switch(fdata->site_mode) {
+        case 0:  break;
+        case 1:  return frib_read_reg(board, buf, count, pos);
+        case 2:  return frib_read_capture(board, buf, count, pos);
+        default: return -EINVAL;
+        }
+    }
+#endif
+    else if(fdata->site_mode!=0)
+        return -EINVAL;
 
     if (count > DMA_BUF_COUNT*DMA_BUF_SIZE) return -EINVAL;
 
@@ -155,6 +193,13 @@ ssize_t char_read(
 	return count;
 }
 
+/* all possible ioctl() value types */
+union ioctl_value {
+    uint8_t u8;
+    uint32_t u32;
+    struct trg_ctrl trg;
+};
+
 static
 long char_ioctl(
 	struct file *filp,
@@ -162,64 +207,48 @@ long char_ioctl(
 	unsigned long arg
 )
 {
+    union ioctl_value uval;
 	long ret;
-    struct board_data *board = (struct board_data *) filp->private_data;
-	struct trg_ctrl trg;
-	uint32_t control = 0, scaler = 0;
-	uint8_t range = 0;
-	uint32_t rng_buf_delay = 0;
-	uint32_t ctrl_tmp;
+    struct file_data *fdata = (struct file_data *)filp->private_data;
+    struct board_data *board = fdata->board;
 
-    dev_dbg(&board->pci_dev->dev, "%s\n", __PRETTY_FUNCTION__);
-    dev_dbg(&board->pci_dev->dev, "cmd: 0x%08x\n", cmd);
+    dev_dbg(&board->pci_dev->dev, "%s: 0x%08x\n", __PRETTY_FUNCTION__, cmd);
+
+    if(_IOC_SIZE(cmd)>sizeof(uval)) {
+        /* as IOCTL codes haven't been validated this could
+         * also be triggered by someone playing games
+         */
+        dev_err(&board->pci_dev->dev, "oops, logic error w/ ioctl sizes %u %u\n",
+                (unsigned)_IOC_SIZE(cmd), (unsigned)sizeof(uval));
+        return -EINVAL;
+    }
+
+    memset(&uval, 0, sizeof(uval));
+
+    if(_IOC_DIR(cmd)&_IOC_WRITE) {
+        /* copy in all provided bytes. based on IOCTL code. */
+        ret = copy_from_user(&uval, (void*)arg, _IOC_SIZE(cmd));
+        if(ret) return ret;
+    }
 
 	/* validate cmd and copy in values from user before locking
 	 * can't access board->
 	 */
 	switch (cmd) {
-	case SET_RANGE:
-		ret = get_user(range, (uint8_t*)arg);
-		range &= 0xFF;
-        dev_dbg(&board->pci_dev->dev, "setting range: %01x\n", range);
+    case SET_RANGE:
+        ret = 0;
 		break;
-	case SET_FSAMP:
-		ret = get_user(scaler, (uint32_t*)arg);
-		if(!ret) {
-            dev_dbg(&board->pci_dev->dev, "clock scaler: %d\n", scaler);
-
-			if ((scaler == 0) || scaler > PICO_CONV_MAX){
-				printk(KERN_DEBUG MOD_NAME
-					": prescaler out of range (%d > %d)\n",
-					scaler, PICO_CONV_MAX);
-
-				ret = -EINVAL;
-			}
-		}
+    case SET_FSAMP:
+        if ((uval.u32 == 0) || uval.u32 > PICO_CONV_MAX){
+            return -EINVAL;
+        } else {
+            ret = 0;
+        }
 		break;
-	case SET_TRG:
-		ret = copy_from_user(&trg, (void*)arg, sizeof(trg));
-        dev_dbg(&board->pci_dev->dev, "    trg.limit: %08x\n",
-			*(uint32_t *)&trg.limit);
-        dev_dbg(&board->pci_dev->dev, "    trg.nrsamp: %d\n", trg.nr_samp);
-        dev_dbg(&board->pci_dev->dev, "    trg.ch_sel: %d\n", trg.ch_sel);
-        dev_dbg(&board->pci_dev->dev, "    trg.mode: %s\n",
-			(trg.mode == DISABLED ? "DISABLED" :
-			trg.mode == POS_EDGE ?  "POS_EDGE" :
-			trg.mode == NEG_EDGE ?  "NEG_EDGE" : "BOTH_EDGE"));
-
-		break;
-	case SET_RING_BUF:
-		ret = get_user(rng_buf_delay, (uint32_t*)arg);
-        dev_dbg(&board->pci_dev->dev, "rng_buf_delay: %d\n", rng_buf_delay);
-		break;
+    case SET_TRG:
+    case SET_RING_BUF:
 	case SET_GATE_MUX:
-        dev_dbg(&board->pci_dev->dev, "set gate mux: %d\n", control);
-		ret = get_user(control, (uint32_t*)arg);
-		break;
 	case SET_CONV_MUX:
-        dev_dbg(&board->pci_dev->dev, "set conv mux: %d\n", control);
-		ret = get_user(control, (uint32_t*)arg);
-		break;
 	case GET_RANGE:
 	case GET_FSAMP:
 	case GET_B_TRANS:
@@ -227,91 +256,130 @@ long char_ioctl(
 		ret = 0;
 		break;
 	case GET_VERSION:
-		return put_user(1, (uint32_t*)arg);
+        /* Versions:
+         *  0 - implied by errno==EINVAL
+         *  1 - Added GET_VERSION and ABORT_READ
+         *  2 - Added GET_SITE_ID, GET_SITE_VERSION, SET_SITE_MODE.
+         *      Changed all others.
+         */
+        return put_user(2, (uint32_t*)arg);
+    case GET_SITE_ID:
+        return put_user(dmac_site, (uint32_t*)arg);
+    case GET_SITE_VERSION:
+    {
+        uint32_t sver;
+        switch(dmac_site) {
+#ifdef USER_FRIB
+        case USER_SITE_FRIB: sver = 0; break;
+#endif
+        default: sver = 0;
+        }
+        return put_user(sver, (uint32_t*)arg);
+    }
+    case SET_SITE_MODE:
+        if(0) {}
+#ifdef USER_FRIB
+        else if(dmac_site==USER_SITE_FRIB) {
+            if(uval.u32>2) return -EINVAL;
+        }
+#endif
+        else if(uval.u32!=0) return -EINVAL;
+
+        fdata->site_mode = uval.u32;
+
+        return 0;
 	default:
-		ret = -EINVAL;
+        ret = -EINVAL;
 	}
 
     if(ret) return ret;
 
+    /* locking here to protect RMW register operations.
+     * Use dma_queue.lock for convinience
+     */
     spin_lock_irq(&board->dma_queue.lock); /* enter critical section, can't sleep */
 
 	switch (cmd) {
-	case SET_RANGE:
+    case SET_RANGE: {
+        uint32_t control;
 		control = ioread32(board->bar0);
 		control &= ~0xFFUL;
-		control |= range;
+        control |= uval.u8;
 		iowrite32(control, board->bar0);
 		control = ioread32(board->bar0);
 		break;
-
+    }
 	case GET_RANGE:
-		range = ioread32(board->bar0) & 0xFF;
+        uval.u8 = ioread32(board->bar0) & 0xFF;
 		break;
 
 	case SET_FSAMP:
-		iowrite32(scaler, board->bar0 + PICO_CONV_GEN);
-		scaler = ioread32(board->bar0 + PICO_CONV_GEN);
+        iowrite32(uval.u32, board->bar0 + PICO_CONV_GEN);
+        uval.u32 = ioread32(board->bar0 + PICO_CONV_GEN);
 		break;
 
 	case GET_FSAMP:
-		scaler = ioread32(board->bar0 + PICO_CONV_GEN);
+        uval.u32 = ioread32(board->bar0 + PICO_CONV_GEN);
 		break;
 
 	case GET_B_TRANS:
-        control = board->dma_bytes_trans;
+        uval.u32 = board->dma_bytes_trans;
 		break;
 
-	case SET_TRG:
-		iowrite32(*(uint32_t *)&trg.limit,
+    case SET_TRG: {
+        uint32_t ctrl_tmp;
+        iowrite32(*(uint32_t *)&uval.trg.limit,
 			board->bar0 + PICO_ADDR + TRG_OFFS_LIMIT);
-		iowrite32(trg.nr_samp,
+        iowrite32(uval.trg.nr_samp,
 			board->bar0 + PICO_ADDR + TRG_OFFS_NRSAMP);
 
 		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
 
 		/* change the trigger edge */
 		ctrl_tmp &= ~(0x3);
-		ctrl_tmp |= trg.mode;
+        ctrl_tmp |= uval.trg.mode;
 
 		/* change the channel bits */
 		ctrl_tmp &= ~(0x7 << TRG_CTRL_CH_SHIFT);
-		ctrl_tmp |= trg.ch_sel << TRG_CTRL_CH_SHIFT;
+        ctrl_tmp |= uval.trg.ch_sel << TRG_CTRL_CH_SHIFT;
 
 		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
-		control = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
+        uval.u32 = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
 		break;
-
+    }
 	case SET_RING_BUF:
-		iowrite32(rng_buf_delay,
+        iowrite32(uval.u32,
 			board->bar0 + PICO_ADDR + RING_BUFF_OFFS_DELAY);
 		break;
 
-	case SET_GATE_MUX:
-		control &= MUX_TRG_MASK;
-		control <<= MUX_TRG_SHIFT;
+    case SET_GATE_MUX: {
+        uint32_t ctrl_tmp;
+        uval.u32 &= MUX_TRG_MASK;
+        uval.u32 <<= MUX_TRG_SHIFT;
 
 		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		ctrl_tmp &= ~(MUX_TRG_MASK << MUX_TRG_SHIFT);
-		ctrl_tmp |= control;
+        ctrl_tmp |= uval.u32;
 
 		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + PICO_CONV_TRG);
-		control = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
+        uval.u32 = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
-
-	case SET_CONV_MUX:
-		control &= MUX_CONV_MASK;
-		control <<= MUX_CONV_SHIFT;
+    }
+    case SET_CONV_MUX: {
+        uint32_t ctrl_tmp;
+        uval.u32 &= MUX_CONV_MASK;
+        uval.u32 <<= MUX_CONV_SHIFT;
 
 		ctrl_tmp = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		ctrl_tmp &= ~(MUX_CONV_MASK << MUX_CONV_SHIFT);
-		ctrl_tmp |= control;
+        ctrl_tmp |= uval.u32;
 
 		iowrite32(ctrl_tmp, board->bar0 + PICO_ADDR + PICO_CONV_TRG);
-		control = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
+        uval.u32 = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
-
+    }
 	case ABORT_READ:
+        /* abort in progress DMA waiter */
         board->dma_irq_flag = 2;
         wake_up_locked(&board->dma_queue);
 
@@ -321,46 +389,40 @@ long char_ioctl(
 
     spin_unlock_irq(&board->dma_queue.lock); /* end of critical section, can't access board-> */
 
-	/* copy to user */
-	switch (cmd) {
-	case SET_RANGE:
-        dev_dbg(&board->pci_dev->dev, "   control reg readback: %08x\n",
-			range);
-		break;
-	case GET_RANGE:
-        dev_dbg(&board->pci_dev->dev, "   range: %x\n", range);
-		ret = put_user(range, (uint8_t*)arg);
-		break;
-	case SET_FSAMP:
-        dev_dbg(&board->pci_dev->dev, "   scaler readback: %08x\n",
-			scaler);
-		break;
-	case GET_FSAMP:
-        dev_dbg(&board->pci_dev->dev, "   scaler: %d", scaler);
-		ret = put_user(scaler, (uint32_t*)arg);
-		break;
-	case SET_TRG:
-        dev_dbg(&board->pci_dev->dev, "   trigger control: %08x\n",
-			(unsigned)control);
-		break;
-	case SET_RING_BUF:
-		break;
-	case SET_GATE_MUX:
-        dev_dbg(&board->pci_dev->dev, "cont_trg reg: %08x\n",
-			(unsigned)control);
-		break;
-	case SET_CONV_MUX:
-        dev_dbg(&board->pci_dev->dev, "cont_trg reg: %08x\n",
-			(unsigned)control);
-		break;
-	case GET_B_TRANS:
-		ret = put_user(control, (uint32_t*)arg);
-		break;
-	case ABORT_READ:
-		break;
-	}
+#ifdef USER_FRIB
+    if(cmd==ABORT_READ) {
+        /* abort any waiting for capture buffer */
+        spin_lock_irq(&board->capture_queue.lock);
+        board->capture_ready = 2;
+        wake_up_locked(&board->capture_queue);
+        spin_unlock_irq(&board->capture_queue.lock);
+    }
+#endif
+
+    if(_IOC_DIR(cmd)&_IOC_READ) {
+        ret = copy_to_user((void*)arg, &uval, _IOC_SIZE(cmd));
+        if(ret) return ret;
+    }
 
 	return ret;
+}
+
+static
+ssize_t char_write(struct file *filp, const char __user *buf, size_t count, loff_t *pos)
+{
+    struct file_data *fdata = (struct file_data *)filp->private_data;
+    struct board_data *board = fdata->board;
+    if(0) {}
+#ifdef USER_FRIB
+    else if(dmac_site==USER_SITE_FRIB) {
+        switch(fdata->site_mode) {
+        case 1:  return frib_write_reg(board, buf, count, pos);
+        default: return -EINVAL;
+        }
+    }
+#endif
+    else
+        return -EINVAL;
 }
 
 const struct file_operations amc_pico_fops = {
@@ -368,5 +430,110 @@ const struct file_operations amc_pico_fops = {
 	.open		= char_open,
 	.release	= char_release,
 	.read		= char_read,
+    .write      = char_write,
 	.unlocked_ioctl = char_ioctl
 };
+
+#ifdef USER_FRIB
+
+static ssize_t frib_write_reg(struct board_data *board,
+                             const char __user *buf,
+                             size_t count,
+                             loff_t *pos)
+{
+    ssize_t ret=0;
+    unsigned offset, end;
+    const uint32_t __user *ibuf = (const uint32_t __user *)buf;
+
+    if(count%4) return -EINVAL;
+    if(!pos || *pos<USER_ADDR) return -EINVAL;
+
+    offset = *pos-USER_ADDR;
+
+    if(offset>=0x10000) return -EINVAL;
+
+    if(count>0x10000-offset)
+        count = 0x10000-offset;
+
+    end = offset+count;
+
+    for(; offset<count; offset+=4, ibuf+=4)
+    {
+        uint32_t val;
+        ret = get_user(val, ibuf);
+        if(unlikely(ret)) break;
+        iowrite32(val, board->bar0 + USER_ADDR + offset);
+    }
+
+    if(!ret) ret=count;
+    return ret;
+}
+
+static ssize_t frib_read_reg(struct board_data *board,
+                             char __user *buf,
+                             size_t count,
+                             loff_t *pos)
+{
+    ssize_t ret=0;
+    unsigned offset, end;
+    uint32_t __user *ibuf = (uint32_t __user *)buf;
+
+    if(count%4) return -EINVAL;
+    if(!pos || *pos<USER_ADDR) return -EINVAL;
+
+    offset = *pos-USER_ADDR;
+
+    if(offset>=0x10000) return 0;
+
+    if(count>0x10000-offset)
+        count = 0x10000-offset;
+
+    end = offset+count;
+
+    for(; ret && offset<count; offset+=4, ibuf+=4)
+    {
+        uint32_t val = ioread32(board->bar0 + USER_ADDR + offset);
+        ret = put_user(val, ibuf);
+    }
+
+    if(!ret) ret=count;
+    return ret;
+    /* *pos not updated */
+}
+
+static ssize_t frib_read_capture(struct board_data *board,
+                                 char __user *buf,
+                                 size_t count,
+                                 loff_t *pos)
+{
+    ssize_t ret;
+    unsigned offset;
+
+    if(count%4) return -EINVAL;
+    if(!pos || *pos<USER_ADDR+0x40) return -EINVAL;
+
+    offset = *pos-USER_ADDR+0x40;
+
+    if(offset>=board->capture_length) return 0;
+
+    if(count > board->capture_length-offset)
+        count = board->capture_length-offset;
+
+    spin_lock_irq(&board->capture_queue.lock);
+
+    ret = wait_event_interruptible_locked_irq(board->capture_queue, board->capture_ready!=0);
+
+    if(!ret && board->capture_ready!=1)
+        ret = -ECANCELED;
+    board->capture_ready = 0;
+
+    spin_unlock_irq(&board->capture_queue.lock);
+
+    if(ret) return ret;
+
+    ret = copy_to_user(buf, board->capture_buf, count);
+    return ret;
+    /* *pos not updated */
+}
+
+#endif
