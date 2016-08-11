@@ -29,6 +29,8 @@ PERL := perl
 all: modules gen_py test/picodefs.py
 
 modules_install modules: amc_pico_version.h
+
+modules_install modules help:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
 clean:
