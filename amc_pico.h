@@ -5,6 +5,8 @@
  *
  *  Jan Marjanovic <j.marjanovic@caenels.com>
  *
+ *  Copyright 2016 Board of Trustees of Michigan State University 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License v2 as published by
  * the Free Software Foundation.
