@@ -10,10 +10,7 @@
 # describing the VCS revision
 #
 
-use FindBin qw($Bin);
-use lib "$Bin/../../lib/perl";
-
-use EPICS::Getopts;
+use Getopt::Std(getopts);
 use POSIX qw(strftime);
 
 use strict;
