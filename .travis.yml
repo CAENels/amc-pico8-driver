@@ -4,6 +4,7 @@ language: c
 compiler:
   - gcc
 env:
+  - KVER=3.2.1
   - KVER=3.16.1
 install:
   - install -d $HOME/linux
