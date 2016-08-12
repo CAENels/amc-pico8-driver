@@ -458,24 +458,26 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             pico_pci_cleanup(dev, board);
         }
     }
+    if(!ret) {
 #ifdef CONFIG_AMC_PICO_FRIB
-    if(dmac_site==USER_SITE_FRIB) {
-        init_waitqueue_head(&board->capture_queue);
+        if(dmac_site==USER_SITE_FRIB) {
+            init_waitqueue_head(&board->capture_queue);
 
-        board->capture_length = (0x6c-0x40)*4;
-        board->capture_buf = kmalloc(4*board->capture_length, GFP_KERNEL);
-        if(!board->capture_buf) {
-            board->capture_length = 0;
-            dev_err(&dev->dev, "FRIB capture buffer alloc fails.  Capture disabled.\n");
+            board->capture_length = (0x6c-0x40)*4;
+            board->capture_buf = kmalloc(4*board->capture_length, GFP_KERNEL);
+            if(!board->capture_buf) {
+                board->capture_length = 0;
+                dev_err(&dev->dev, "FRIB capture buffer alloc fails.  Capture disabled.\n");
+            }
+
+            iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_CLEAR);
+            iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_ENABLE);
         }
-
-        iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_CLEAR);
-        iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_ENABLE);
-    }
 #endif
-    else {
-        iowrite32(INT_DMA_DONE, board->bar0+INT_CLEAR);
-        iowrite32(INT_DMA_DONE, board->bar0+INT_ENABLE);
+        else {
+            iowrite32(INT_DMA_DONE, board->bar0+INT_CLEAR);
+            iowrite32(INT_DMA_DONE, board->bar0+INT_ENABLE);
+        }
     }
     return ret;
 }
