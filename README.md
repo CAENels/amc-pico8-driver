@@ -1,3 +1,11 @@
+== Build ==
+
+```sh
+cp config.example .config
+make
+```
+
+== Debugging ==
 
 To enable debug printing for kernels build with CONFIG_DYNAMIC_DEBUG,
 after module is loaded.
