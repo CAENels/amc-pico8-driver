@@ -109,8 +109,11 @@ MODULE_DEVICE_TABLE(pci, ids);
 
 irqreturn_t amc_isr(int irq, void *dev_id)
 {
+    cycles_t tstart, tend;
     struct board_data *board;
     uint32_t active;
+
+    tstart = get_cycles();
 
     board = (struct board_data *)dev_id;
 
@@ -202,6 +205,11 @@ irqreturn_t amc_isr(int irq, void *dev_id)
     }
 
     iowrite32(active, board->bar0+INT_CLEAR);
+
+    tend = get_cycles();
+
+    ACCESS_ONCE(board->last_isr) = tend-tstart;
+    atomic_inc(&board->num_isr);
 
     return IRQ_HANDLED;
 }
@@ -318,6 +326,39 @@ void pico_wait_for_op(struct board_data *board)
 }
 
 static
+ssize_t lastisr_show(struct device *dev, struct device_attribute *attr,
+                     char *buf)
+{
+    struct board_data *board = dev_get_drvdata(dev);
+    cycles_t value = ACCESS_ONCE(board->last_isr);
+    return sprintf(buf, "%llu", (unsigned long long)value);
+}
+
+static
+DEVICE_ATTR(lastisr, 0444, lastisr_show, NULL);
+
+static
+ssize_t numisr_store(struct device *dev, struct device_attribute *attr,
+                     const char *buf, size_t count)
+{
+    struct board_data *board = dev_get_drvdata(dev);
+    atomic_set(&board->num_isr, 0);
+    return count;
+}
+
+static
+ssize_t numisr_show(struct device *dev, struct device_attribute *attr,
+                     char *buf)
+{
+    struct board_data *board = dev_get_drvdata(dev);
+    unsigned num = atomic_read(&board->num_isr);
+    return sprintf(buf, "%u", num);
+}
+
+static
+DEVICE_ATTR(numisr, 0644, numisr_show, numisr_store);
+
+static
 int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
 {
 #define ERR(COND, LBL, MSG, ...) if(COND) { dev_err(&dev->dev, MSG, ##__VA_ARGS__); goto LBL; }
@@ -325,8 +366,14 @@ int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
     struct device *cdev;
     int ret;
 
+    ret = device_create_file(&dev->dev, &dev_attr_lastisr);
+    ERR(ret, done, "Failed to add lastisr sysfs\n");
+
+    ret = device_create_file(&dev->dev, &dev_attr_numisr);
+    ERR(ret, unsysfs1, "Failed to add numisr sysfs\n");
+
     ret = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
-    ERR(ret, done, "Failed to allocate chrdev number\n");
+    ERR(ret, unsysfs2, "Failed to allocate chrdev number\n");
 
     cdev_init(&board->cdev, &amc_pico_fops);
     board->cdev.owner = THIS_MODULE;
@@ -347,6 +394,10 @@ cdel:
     pico_wait_for_op(board);
 cfree:
     unregister_chrdev_region(board->cdevno, 1);
+unsysfs2:
+    device_remove_file(&dev->dev, &dev_attr_numisr);
+unsysfs1:
+    device_remove_file(&dev->dev, &dev_attr_lastisr);
 done:
     return ret;
 #undef ERR
@@ -359,6 +410,8 @@ void pico_cdev_cleanup(struct pci_dev *dev, struct board_data *board)
     cdev_del(&board->cdev);
     pico_wait_for_op(board);
     unregister_chrdev_region(board->cdevno, 1);
+    device_remove_file(&dev->dev, &dev_attr_numisr);
+    device_remove_file(&dev->dev, &dev_attr_lastisr);
 }
 
 /**
@@ -517,6 +570,27 @@ static int __init damc_fmc25_pcie_init(void)
     printk(KERN_DEBUG "===============================================\n");
 
 	print_all_ioctls();
+
+    {
+        unsigned i;
+        cycles_t A = get_cycles(),
+                 sum = 0,
+                 sum2= 0;
+
+        for(i=0; i<10; i++) {
+            cycles_t B, D;
+            msleep(10);
+            mb();
+            B = get_cycles();
+            D = B-A;
+            sum  += D;
+            sum2 += D*D;
+            A = B;
+        }
+
+        printk(KERN_DEBUG "get_cycles() calibration for msleep(10)\n");
+        printk(KERN_DEBUG "N=10, sum=%llu sum2=%llu\n", sum, sum2);
+    }
 
 	damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
 	if(!damc_fmc25_class) return -ENOMEM;

@@ -29,6 +29,7 @@
 #include <linux/irqreturn.h>
 #include <linux/device.h>
 #include <linux/pci.h>
+#include <linux/atomic.h>
 
 #include "amc_pico.h"
 #include "amc_pico_regs.h"
@@ -98,6 +99,9 @@ struct board_data {
     uint32_t *capture_buf;
     wait_queue_head_t capture_queue;
 #endif
+
+    atomic_t num_isr;
+    cycles_t last_isr;
 };
 
 #endif /* AMC_PICO_INTERNAL_H_ */
