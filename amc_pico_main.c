@@ -415,8 +415,15 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             board->capture_length = 0;
             dev_err(&dev->dev, "FRIB capture buffer alloc fails.  Capture disabled.\n");
         }
+
+        iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_CLEAR);
+        iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_ENABLE);
     }
 #endif
+    else {
+        iowrite32(INT_DMA_DONE, board->bar0+INT_CLEAR);
+        iowrite32(INT_DMA_DONE, board->bar0+INT_ENABLE);
+    }
     return ret;
 }
 
@@ -429,14 +436,15 @@ static void remove(struct pci_dev *dev)
 {
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
-#ifdef CONFIG_AMC_PICO_FRIB
-    kfree(board->capture_buf);
-#endif
+    iowrite32(0, board->bar0+INT_ENABLE);
 	dev_info(&dev->dev, " remove()\n");
     pico_cdev_cleanup(dev, board);
     pico_pci_cleanup(dev, board);
 
 	/* Free allocated memory */
+#ifdef CONFIG_AMC_PICO_FRIB
+    kfree(board->capture_buf);
+#endif
 	kfree(board);
 }
 

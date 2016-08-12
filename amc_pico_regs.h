@@ -53,6 +53,8 @@
 #define INT_READ (INT_ADDR+0xc)
 /* bit mask.  write to clear per interrupt source */
 #define INT_CLEAR (INT_ADDR+0x10)
+/* bit mask.  write to un-mask per interrupt source */
+#define INT_ENABLE (INT_ADDR+0x14)
 
 /* mask for both INT_READ and INT_CLEAR.
  * HW impliments 8 bits.
