@@ -121,8 +121,8 @@ irqreturn_t amc_isr(int irq, void *dev_id)
     if (board == NULL)
         return IRQ_NONE;
 
-    active = ioread32(board->bar0+INT_READ);
-    if(unlikely(active&~INT_MASK)) {
+    active = ioread32(board->bar0+INTR_LATCH);
+    if(unlikely(active&~INTR_MASK)) {
         /* Maybe some new FW feature has signaled an interrupt we don't know
          * how to handle, and can't mask out.
          * So clear it and hope for the best...
@@ -137,7 +137,7 @@ irqreturn_t amc_isr(int irq, void *dev_id)
         return IRQ_NONE;
     }
 
-    if(active&INT_DMA_DONE) {
+    if(active&INTR_DMA_DONE) {
         size_t nsent = 0;
         unsigned long flags;
         unsigned cycles = 0;
@@ -182,7 +182,7 @@ irqreturn_t amc_isr(int irq, void *dev_id)
 
         dev_dbg(&board->pci_dev->dev, "ISR: waked up dma_queue\n");
     }
-    if(active&INT_USER) {
+    if(active&INTR_USER) {
         if(0) {}
 #ifdef CONFIG_AMC_PICO_FRIB
         else if(dmac_site==USER_SITE_FRIB) {
@@ -204,7 +204,7 @@ irqreturn_t amc_isr(int irq, void *dev_id)
 #endif
     }
 
-    iowrite32(active, board->bar0+INT_CLEAR);
+    iowrite32(active, board->bar0+INTR_CLEAR);
 
     tend = get_cycles();
 
@@ -472,14 +472,14 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             }
 
             mb();
-            iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_CLEAR);
-            iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_ENABLE);
+            iowrite32(INTR_DMA_DONE|INTR_USER, board->bar0+INTR_CLEAR);
+            iowrite32(INTR_DMA_DONE|INTR_USER, board->bar0+INTR_ENABLE);
         }
 #endif
         else {
             mb();
-            iowrite32(INT_DMA_DONE, board->bar0+INT_CLEAR);
-            iowrite32(INT_DMA_DONE, board->bar0+INT_ENABLE);
+            iowrite32(INTR_DMA_DONE, board->bar0+INTR_CLEAR);
+            iowrite32(INTR_DMA_DONE, board->bar0+INTR_ENABLE);
         }
     }
     return ret;
@@ -494,7 +494,7 @@ static void remove(struct pci_dev *dev)
 {
 	struct board_data *board = dev_get_drvdata(&dev->dev);
 
-    iowrite32(0, board->bar0+INT_ENABLE);
+    iowrite32(0, board->bar0+INTR_ENABLE);
 	dev_info(&dev->dev, " remove()\n");
     pico_cdev_cleanup(dev, board);
     pico_pci_cleanup(dev, board);

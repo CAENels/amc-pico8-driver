@@ -36,32 +36,7 @@
 #define DMA_ADDR	(0x10000)
 #define MUX_ADDR	(0x20000)
 #define USER_ADDR   (0x30000)
-#define INT_ADDR	(0x40000)
-
-/* on INT_ADDR
- * Introduced in FW version 0x0001000b
- */
-/* constant 0x157C5721 */
-#define INT_ID (INT_ADDR+0x0)
-#define INT_STATUS (INT_ADDR+0x4)
-/* bit indicating whether device think MSI is enabld */
-#define INT_STATUS_MSI_EN (1<<8)
-/* bit indicating whether an interrupt is latched (INT_READ is non-zero) */
-#define INT_STATUS_ACT    (1<<0)
-/* unused #define INT_CTRL (INT_ADDR+0x8) */
-/* bit mask of all interrupt sources */
-#define INT_READ (INT_ADDR+0xc)
-/* bit mask.  write to clear per interrupt source */
-#define INT_CLEAR (INT_ADDR+0x10)
-/* bit mask.  write to un-mask per interrupt source */
-#define INT_ENABLE (INT_ADDR+0x14)
-
-/* mask for both INT_READ and INT_CLEAR.
- * HW impliments 8 bits.
- */
-#define INT_DMA_DONE 0x1
-#define INT_USER 0x2
-#define INT_MASK (INT_DMA_DONE|INT_USER)
+#define INTR_ADDR	(0x40000)
 
 /* on DMA_ADDR */
 #define DMA_OFFSET_STATUS	(0x0)
@@ -100,6 +75,30 @@
 
 #define DMA_CMD_MASK_DMA_GO	(0x80000000)
 #define DMA_CMD_MASK_GEN_IRQ	(0x08000000)
+
+/* on INTR */
+/* Introduced in FW version 0x0001000b */
+/* constant 0x157C5721 */
+#define INTR_ID (INTR_ADDR+0x0)
+#define INTR_STATUS (INTR_ADDR+0x4)
+/* bit indicating whether device think MSI is enabld */
+#define INTR_STATUS_MSI_EN (1<<8)
+/* bit indicating whether an interrupt is latched (INTR_LATCH is non-zero) */
+#define INTR_STATUS_ACT    (1<<0)
+/* unused #define INTR_CONTROL (INTR_ADDR+0x8) */
+/* bit mask of all interrupt sources */
+#define INTR_LATCH (INTR_ADDR+0xc)
+/* bit mask.  write to clear per interrupt source */
+#define INTR_CLEAR (INTR_ADDR+0x10)
+/* bit mask.  write to un-mask per interrupt source */
+#define INTR_ENABLE (INTR_ADDR+0x14)
+
+/* mask for both INTR_LATCH and INTR_CLEAR.
+ * HW impliments 8 bits.
+ */
+#define INTR_DMA_DONE 0x1
+#define INTR_USER 0x2
+#define INTR_MASK (INTR_DMA_DONE|INTR_USER)
 
 /** Registers specific to FRIB local firmware.
  */
