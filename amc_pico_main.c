@@ -426,7 +426,8 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
     int ret;
     struct board_data *board = NULL;
 
-	dev_info(&dev->dev, "probe()\n");
+    dev_info(&dev->dev, "probe() with slot '%s'\n",
+             dev->slot ? pci_slot_name(dev->slot) : "<no slot>");
 
 	/* Allocate memory for board structure */
 	board = kzalloc(sizeof(struct board_data), GFP_KERNEL);
@@ -576,12 +577,13 @@ static int __init damc_fmc25_pcie_init(void)
 	print_all_ioctls();
 
     {
+        const unsigned N = 4;
         unsigned i;
         cycles_t A = get_cycles(),
                  sum = 0,
                  sum2= 0;
 
-        for(i=0; i<10; i++) {
+        for(i=0; i<N; i++) {
             cycles_t B, D;
             msleep(10);
             mb();
@@ -593,7 +595,7 @@ static int __init damc_fmc25_pcie_init(void)
         }
 
         printk(KERN_DEBUG "get_cycles() calibration for msleep(10)\n");
-        printk(KERN_DEBUG "N=10, sum=%llu sum2=%llu\n", sum, sum2);
+        printk(KERN_DEBUG "N=%u, sum=%llu sum2=%llu\n", N, sum, sum2);
     }
 
 	damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
