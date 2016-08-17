@@ -42,7 +42,7 @@ gen_py: gen_py.c amc_pico.h amc_pico_version.h
 	$(CC) -o $@ -g -Wall $<
 
 amc_pico_version.h::
-	$(PERL) genVersionHeader.pl -t $(PWD)/.. -N AMC_PICO_VERSION $(PWD)/amc_pico_version.h
+	$(PERL) genVersionHeader.pl -t . -N AMC_PICO_VERSION $(PWD)/amc_pico_version.h
 
 test/picodefs.py: gen_py
 	./$< $@
