@@ -429,7 +429,6 @@ loff_t char_llseek(struct file *filp, loff_t pos, int whence)
     struct file_data *fdata = (struct file_data *)filp->private_data;
     struct board_data *board = fdata->board;
     loff_t npos;
-    (void)board;
 
     if(dmac_site!=USER_SITE_FRIB || fdata->site_mode==0)
         return -EINVAL;
@@ -451,6 +450,8 @@ loff_t char_llseek(struct file *filp, loff_t pos, int whence)
     return npos;
 
 #else
+    (void)board;
+    (void)npos;
     return -EINVAL;
 #endif
 }

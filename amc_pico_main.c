@@ -460,8 +460,9 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
         }
     }
     if(!ret) {
+        if(0) {}
 #ifdef CONFIG_AMC_PICO_FRIB
-        if(dmac_site==USER_SITE_FRIB) {
+        else if(dmac_site==USER_SITE_FRIB) {
             init_waitqueue_head(&board->capture_queue);
 
             board->capture_length = (0x6c-0x40)*4;
