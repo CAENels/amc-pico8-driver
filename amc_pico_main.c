@@ -470,11 +470,13 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
                 dev_err(&dev->dev, "FRIB capture buffer alloc fails.  Capture disabled.\n");
             }
 
+            mb();
             iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_CLEAR);
             iowrite32(INT_DMA_DONE|INT_USER, board->bar0+INT_ENABLE);
         }
 #endif
         else {
+            mb();
             iowrite32(INT_DMA_DONE, board->bar0+INT_CLEAR);
             iowrite32(INT_DMA_DONE, board->bar0+INT_ENABLE);
         }
