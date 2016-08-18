@@ -147,59 +147,70 @@ irqreturn_t amc_isr(int irq, void *dev_id)
 
         dev_dbg(&board->pci_dev->dev, "ISR: irq: 0x%x %u\n", irq, (unsigned)count);
 
-        if(count==0)
-            return IRQ_NONE;
+        if(unlikely(count==0)) {
+            dev_warn(&board->pci_dev->dev, "DMA DONE w/ response fifo empty\n");
 
-        do {
-            if (unlikely(count == 0xFFFFFFFFUL)) {
-                dev_err(&board->pci_dev->dev,
-                        "something wrong when reading from DMA\n");
-                break;
+        } else {
 
-            } else if (unlikely(cycles++>100)) {
-                dev_err(&board->pci_dev->dev, "FIFO ran away, stopping\n");
-                op = 2;
-                break;
+            while (count > 0) {
+                if (unlikely(count == 0xFFFFFFFFUL)) {
+                    dev_err(&board->pci_dev->dev,
+                            "something wrong when reading from DMA\n");
+                    break;
+
+                } else if (unlikely(cycles++>100)) {
+                    dev_err(&board->pci_dev->dev, "FIFO ran away, stopping\n");
+                    op = 2;
+                    break;
+                }
+
+                nsent += ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+                dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
+                dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
+                dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
+                        ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
+
+                /* pop from resp fifo */
+                iowrite32(0, board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
+                mb();
+                count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
             }
 
-            nsent += ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
-            dev_dbg(&board->pci_dev->dev, "   ISR: resp count: %08x\n", count);
-            dev_dbg(&board->pci_dev->dev, "   ISR: resp len: %08x\n", (unsigned)nsent);
-            dev_dbg(&board->pci_dev->dev, "   ISR: resp addr: %08x\n",
-                    ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_ADDR));
+            spin_lock_irqsave(&board->dma_queue.lock, flags);
+            board->dma_irq_flag = op;
+            board->dma_bytes_trans = nsent;
+            wake_up_locked(&board->dma_queue);
+            spin_unlock_irqrestore(&board->dma_queue.lock, flags);
 
-            /* pop from resp fifo */
-            iowrite32(0, board->bar0 + DMA_ADDR + DMA_OFFSET_RESP_LEN);
-            mb();
-            count = (ioread32(board->bar0 + DMA_ADDR + DMA_OFFSET_STATUS) >> 16) & 0x7FF;
-        } while (count > 0);
-
-        spin_lock_irqsave(&board->dma_queue.lock, flags);
-        board->dma_irq_flag = op;
-        board->dma_bytes_trans = nsent;
-        wake_up_locked(&board->dma_queue);
-        spin_unlock_irqrestore(&board->dma_queue.lock, flags);
-
-        dev_dbg(&board->pci_dev->dev, "ISR: waked up dma_queue\n");
+            dev_dbg(&board->pci_dev->dev, "ISR: waked up dma_queue\n");
+        }
     }
     if(active&INTR_USER) {
         if(0) {}
 #ifdef CONFIG_AMC_PICO_FRIB
         else if(dmac_site==USER_SITE_FRIB) {
+            uint32_t status = ioread32(board->bar0+USER_STATUS);
             unsigned long flags;
             /* TODO: Note, being sloppy with locking here
-             *  Not sure how to guard this since can't copy_to_user()
+             *  Not sure how to guard this buffer since can't copy_to_user()
              *  with spinlock held.
              */
             uint32_t *buf = board->capture_buf;
-            unsigned i;
-            for(i=0; i<board->capture_length; i++) {
-                *buf++ = ioread32(board->bar0 + USER_ADDR + FRIB_CAP_START + 4*i);
+            uint32_t i;
+
+            if(status&(1<<17)) { /* waiting for ACK */
+                for(i=0; i<board->capture_length; i+=4) {
+                    *buf++ = ioread32(board->bar0 + FRIB_CAP_FIRST + i);
+                }
+
+                /* clear waiting for ACK */
+                iowrite32(1<<16, board->bar0+USER_STATUS);
+
+                spin_lock_irqsave(&board->capture_queue.lock, flags);
+                board->capture_ready = 1;
+                wake_up_locked(&board->capture_queue);
+                spin_unlock_irqrestore(&board->capture_queue.lock, flags);
             }
-            spin_lock_irqsave(&board->capture_queue.lock, flags);
-            board->capture_ready = 1;
-            wake_up_locked(&board->capture_queue);
-            spin_unlock_irqrestore(&board->capture_queue.lock, flags);
         }
 #endif
     }
@@ -465,7 +476,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
         else if(dmac_site==USER_SITE_FRIB) {
             init_waitqueue_head(&board->capture_queue);
 
-            board->capture_length = (0x6c-0x40)*4;
+            board->capture_length = FRIB_CAP_LAST-FRIB_CAP_FIRST+4;
             board->capture_buf = kmalloc(4*board->capture_length, GFP_KERNEL);
             if(!board->capture_buf) {
                 board->capture_length = 0;

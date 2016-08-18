@@ -153,6 +153,7 @@ ssize_t char_read(
     cond = board->dma_irq_flag;
     board->dma_irq_flag = 0;
 	board->read_in_progress = 0;
+    dev_dbg(&board->pci_dev->dev, "read() wait complete w/ rc=%d cond=%d\n", rc, cond);
 
 	if (rc != 0 || cond!=1) { /* interrupted or aborted */
 		if(cond!=1) rc = -ECANCELED;
@@ -259,7 +260,7 @@ long char_ioctl(
          *  2 - Added GET_SITE_ID, GET_SITE_VERSION, SET_SITE_MODE.
          *      Changed all others.
          */
-        return put_user(2, (uint32_t*)arg);
+        return put_user(GET_VERSION_CURRENT, (uint32_t*)arg);
     case GET_SITE_ID:
         return put_user(dmac_site, (uint32_t*)arg);
     case GET_SITE_VERSION:
@@ -427,7 +428,7 @@ static
 loff_t char_llseek(struct file *filp, loff_t pos, int whence)
 {
     struct file_data *fdata = (struct file_data *)filp->private_data;
-    struct board_data *board = fdata->board;
+    //struct board_data *board = fdata->board;
     loff_t npos;
 
     if(dmac_site!=USER_SITE_FRIB || fdata->site_mode==0)
@@ -450,7 +451,7 @@ loff_t char_llseek(struct file *filp, loff_t pos, int whence)
     return npos;
 
 #else
-    (void)board;
+    //(void)board;
     (void)npos;
     return -EINVAL;
 #endif
@@ -542,11 +543,15 @@ static ssize_t frib_read_capture(struct board_data *board,
     unsigned offset;
 
     if(count%4) return -EINVAL;
-    if(!pos || *pos<USER_ADDR+0x40) return -EINVAL;
+    if(!pos || *pos<USER_ADDR+0x100) return -EINVAL;
 
-    offset = *pos-USER_ADDR+0x40;
+    offset = *pos-(USER_ADDR+0x100);
 
-    if(offset>=board->capture_length) return 0;
+    if(offset>=board->capture_length) {
+        dev_dbg(&board->pci_dev->dev, "Capture read starts past end of buffer %u %u\n",
+                offset, board->capture_length);
+        return 0;
+    }
 
     if(count > board->capture_length-offset)
         count = board->capture_length-offset;
@@ -564,6 +569,7 @@ static ssize_t frib_read_capture(struct board_data *board,
     if(ret) return ret;
 
     ret = copy_to_user(buf, board->capture_buf, count);
+    if(!ret) ret=count;
     return ret;
     /* *pos not updated */
 }

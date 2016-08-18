@@ -13,6 +13,26 @@ Several build time options are available.
 See [config.example](config.example) for a full listing.
 The provided config.example is a generally useful default.
 
+Device Discovery
+================
+
+The simplest way for a user application to find a pico8 device
+is to directly provide a character device path (```/dev/amc_pico_*```).
+
+Several additional methods are available, though these depend on the
+charactor device not having been re-named (manually or by udev).
+Symlinks are ok though.
+
+By PCI ID.  For example,  Bus 1, device 0, function 0 under the default domain (0000).
+Look for a sub-directory matching ```/sys/bus/pci/devices/0000:01:00.0/amc_pico/amc_pico_*```.
+The name of the final sub-directory will be the charactor device name.
+
+By PCIe slot label (not necessarily a simple number).
+Read all files ```/sys/bus/pci/slots/*/address``` to build a mapping between slot label
+and PCI ID.
+For example ```/sys/bus/pci/slots/1-2/address``` contains ```0000:01:00.0```
+so slot "1-2" is device "0000:01:00.0".
+
 Debugging
 =========
 
