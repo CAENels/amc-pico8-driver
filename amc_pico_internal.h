@@ -24,6 +24,7 @@
 #ifndef AMC_PICO_INTERNAL_H_
 #define AMC_PICO_INTERNAL_H_
 
+#include <linux/kobject.h>
 #include <linux/spinlock.h>
 #include <linux/cdev.h>
 #include <linux/irqreturn.h>
@@ -62,8 +63,11 @@ enum dmac_irqmode_t {
  */
 
 struct board_data {
+    /* our own kobj, so we may outlive cdev */
+    struct kobject kobj;
+
 	/** the kernel pci device data structure provided by probe() */
-	struct pci_dev *pci_dev; /* TODO: do we really need this? */
+    struct pci_dev *pci_dev;
 
 	/** kernel virtual address of the mapped BAR memory and IO regions of
 	 *  the End Point. Used by map_bars()/unmap_bars().
@@ -102,6 +106,7 @@ struct board_data {
 
     atomic_t num_isr;
     cycles_t last_isr;
+    cycles_t longest_isr;
 };
 
 #endif /* AMC_PICO_INTERNAL_H_ */

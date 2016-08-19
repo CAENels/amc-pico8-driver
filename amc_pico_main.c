@@ -107,9 +107,29 @@ static const struct pci_device_id ids[] = {
 
 MODULE_DEVICE_TABLE(pci, ids);
 
+
+static
+void calib_cycles(uint64_t *cycles, uint64_t *nano)
+{
+    struct timespec tA, tB;
+    cycles_t cA, cB;
+
+    tA = current_kernel_time();
+    cA = get_cycles();
+
+    msleep(10);
+
+    tB = current_kernel_time();
+    cB = get_cycles();
+
+    *cycles = cB-cA;
+    tA = timespec_sub(tB, tA);
+    *nano = timespec_to_ns(&tA);
+}
+
 irqreturn_t amc_isr(int irq, void *dev_id)
 {
-    cycles_t tstart, tend;
+    cycles_t tstart;
     struct board_data *board;
     uint32_t active;
 
@@ -217,10 +237,17 @@ irqreturn_t amc_isr(int irq, void *dev_id)
 
     iowrite32(active, board->bar0+INTR_CLEAR);
 
-    tend = get_cycles();
+    {
+        cycles_t tdelta = get_cycles()-tstart;
 
-    ACCESS_ONCE(board->last_isr) = tend-tstart;
-    atomic_inc(&board->num_isr);
+        ACCESS_ONCE(board->last_isr) = tdelta;
+        if(tdelta>ACCESS_ONCE(board->longest_isr)) {
+            ACCESS_ONCE(board->longest_isr) = tdelta;
+        }
+
+        atomic_inc(&board->num_isr);
+    }
+
 
     return IRQ_HANDLED;
 }
@@ -342,7 +369,7 @@ ssize_t lastisr_show(struct device *dev, struct device_attribute *attr,
 {
     struct board_data *board = dev_get_drvdata(dev);
     cycles_t value = ACCESS_ONCE(board->last_isr);
-    return sprintf(buf, "%llu", (unsigned long long)value);
+    return sprintf(buf, "%llu\n", (unsigned long long)value);
 }
 
 static
@@ -363,11 +390,72 @@ ssize_t numisr_show(struct device *dev, struct device_attribute *attr,
 {
     struct board_data *board = dev_get_drvdata(dev);
     unsigned num = atomic_read(&board->num_isr);
-    return sprintf(buf, "%u", num);
+    return sprintf(buf, "%u\n", num);
 }
 
 static
 DEVICE_ATTR(numisr, 0644, numisr_show, numisr_store);
+
+static
+ssize_t longestisr_store(struct device *dev, struct device_attribute *attr,
+                         const char *buf, size_t count)
+{
+    struct board_data *board = dev_get_drvdata(dev);
+    ACCESS_ONCE(board->longest_isr) = 0;
+    return count;
+}
+
+static
+ssize_t longestisr_show(struct device *dev, struct device_attribute *attr,
+                     char *buf)
+{
+    struct board_data *board = dev_get_drvdata(dev);
+    cycles_t num = ACCESS_ONCE(board->longest_isr);
+    return sprintf(buf, "%lu\n", (unsigned long)num);
+}
+
+static
+DEVICE_ATTR(longestisr, 0644, longestisr_show, longestisr_store);
+
+static
+ssize_t cyclescal_show(struct device *dev, struct device_attribute *attr,
+                     char *buf)
+{
+    uint64_t cycles, nsec;
+    calib_cycles(&cycles, &nsec);
+    return sprintf(buf, "%lu cycles %lu ns\n",
+                   (unsigned long)cycles, (unsigned long)nsec);
+}
+
+static
+DEVICE_ATTR(cyclescal, 0444, cyclescal_show, NULL);
+
+static
+struct attribute * pico_attrs[] = {
+    &dev_attr_lastisr.attr,
+    &dev_attr_numisr.attr,
+    &dev_attr_longestisr.attr,
+    &dev_attr_cyclescal.attr,
+    NULL
+};
+ATTRIBUTE_GROUPS(pico);
+
+static
+void pico_release(struct kobject *obj)
+{
+    struct board_data *board = container_of(obj, struct board_data, kobj);
+
+    /* Free allocated memory */
+#ifdef CONFIG_AMC_PICO_FRIB
+    kfree(board->capture_buf);
+#endif
+    kfree(board);
+}
+
+static
+struct kobj_type pico_ktype = {
+    .release = &pico_release,
+};
 
 static
 int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
@@ -377,14 +465,12 @@ int pico_cdev_setup(struct pci_dev *dev, struct board_data *board)
     struct device *cdev;
     int ret;
 
-    ret = device_create_file(&dev->dev, &dev_attr_lastisr);
-    ERR(ret, done, "Failed to add lastisr sysfs\n");
-
-    ret = device_create_file(&dev->dev, &dev_attr_numisr);
-    ERR(ret, unsysfs1, "Failed to add numisr sysfs\n");
+    ret = sysfs_create_groups(&dev->dev.kobj, pico_groups);
+    //ret = pico_attrs_setup(dev, board);
+    ERR(ret, done, "Failed to add sysfs attrs\n");
 
     ret = alloc_chrdev_region(&board->cdevno, 0, 1, MOD_NAME);
-    ERR(ret, unsysfs2, "Failed to allocate chrdev number\n");
+    ERR(ret, unsysfs, "Failed to allocate chrdev number\n");
 
     cdev_init(&board->cdev, &amc_pico_fops);
     board->cdev.owner = THIS_MODULE;
@@ -405,10 +491,8 @@ cdel:
     pico_wait_for_op(board);
 cfree:
     unregister_chrdev_region(board->cdevno, 1);
-unsysfs2:
-    device_remove_file(&dev->dev, &dev_attr_numisr);
-unsysfs1:
-    device_remove_file(&dev->dev, &dev_attr_lastisr);
+unsysfs:
+    sysfs_remove_groups(&dev->dev.kobj, pico_groups);
 done:
     return ret;
 #undef ERR
@@ -421,8 +505,7 @@ void pico_cdev_cleanup(struct pci_dev *dev, struct board_data *board)
     cdev_del(&board->cdev);
     pico_wait_for_op(board);
     unregister_chrdev_region(board->cdevno, 1);
-    device_remove_file(&dev->dev, &dev_attr_numisr);
-    device_remove_file(&dev->dev, &dev_attr_lastisr);
+    sysfs_remove_groups(&dev->dev.kobj, pico_groups);
 }
 
 /**
@@ -445,6 +528,13 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (!board) {
 		return -ENOMEM;
 	}
+
+    ret = kobject_init_and_add(&board->kobj, &pico_ktype, &dev->dev.kobj, "pico_internal");
+    if(ret) {
+        kfree(board);
+        return ret;
+    }
+    /* henceforth must call kobject_put(board) for cleanup */
 
 	board->pci_dev = dev;
     board->irqmode = dmac_irqmode;
@@ -494,6 +584,7 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
             iowrite32(INTR_DMA_DONE, board->bar0+INTR_ENABLE);
         }
     }
+    if(ret) kobject_put(&board->kobj);
     return ret;
 }
 
@@ -511,11 +602,7 @@ static void remove(struct pci_dev *dev)
     pico_cdev_cleanup(dev, board);
     pico_pci_cleanup(dev, board);
 
-	/* Free allocated memory */
-#ifdef CONFIG_AMC_PICO_FRIB
-    kfree(board->capture_buf);
-#endif
-	kfree(board);
+    kobject_put(&board->kobj);
 }
 
 
@@ -527,7 +614,7 @@ static struct pci_driver pci_driver = {
 	.remove = remove,
 };
 
-
+static
 void print_all_ioctls(void){
 	printk(KERN_DEBUG MOD_NAME
 		": supported IOCTL: SET_RANGE = 0x%08x\n", (unsigned int)SET_RANGE);
@@ -589,25 +676,11 @@ static int __init damc_fmc25_pcie_init(void)
 	print_all_ioctls();
 
     {
-        const unsigned N = 4;
-        unsigned i;
-        cycles_t A = get_cycles(),
-                 sum = 0,
-                 sum2= 0;
+        uint64_t cycles, nsec;
+        calib_cycles(&cycles, &nsec);
 
-        for(i=0; i<N; i++) {
-            cycles_t B, D;
-            msleep(10);
-            mb();
-            B = get_cycles();
-            D = B-A;
-            sum  += D;
-            sum2 += D*D;
-            A = B;
-        }
-
-        printk(KERN_DEBUG "get_cycles() calibration for msleep(10)\n");
-        printk(KERN_DEBUG "N=%u, sum=%llu sum2=%llu\n", N, sum, sum2);
+        printk(KERN_DEBUG "get_cycles() calibration for msleep(10) %llu/%llu\n",
+               (unsigned long long)cycles, (unsigned long long)nsec);
     }
 
 	damc_fmc25_class = class_create(THIS_MODULE, MOD_NAME);
