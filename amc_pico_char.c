@@ -221,11 +221,11 @@ long char_ioctl(
     if(_IOC_SIZE(cmd)<sizeof(uval))
         tocpy = _IOC_SIZE(cmd);
 
-    dev_dbg(&board->pci_dev->dev, "%s: 0x%08x\n", __PRETTY_FUNCTION__, cmd);
+    dev_dbg(&board->pci_dev->dev, "%s: 0x%08x size=%u\n", __PRETTY_FUNCTION__, cmd, (unsigned)tocpy);
 
     if(_IOC_DIR(cmd)&_IOC_WRITE) {
         /* copy in all provided bytes. based on IOCTL code. */
-        ret = copy_from_user(&uval, (void*)arg, tocpy);
+        ret = copy_from_user(&uval, (const void*)arg, tocpy);
         if(ret) return ret;
     }
 
