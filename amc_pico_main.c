@@ -55,9 +55,52 @@
 
 #define DRV_NAME "AMC-Pico8 Driver"
 
-#ifndef CONFIG_PCI_MSI
-# error CONFIG_PCI_MSI is required
-#endif
+
+#if LINUX_VERSION_CODE<KERNEL_VERSION(3,12,0)
+
+#define __ATTRIBUTE_GROUPS(_name)				\
+static const struct attribute_group *_name##_groups[] = {	\
+    &_name##_group,						\
+    NULL,							\
+}
+
+#define ATTRIBUTE_GROUPS(_name)					\
+static const struct attribute_group _name##_group = {		\
+    .attrs = _name##_attrs,					\
+};								\
+__ATTRIBUTE_GROUPS(_name)
+
+static inline int sysfs_create_groups(struct kobject *kobj,
+                      const struct attribute_group **groups)
+{
+    int error = 0;
+    int i;
+
+    if (!groups)
+        return 0;
+
+    for (i = 0; groups[i]; i++) {
+        error = sysfs_create_group(kobj, groups[i]);
+        if (error) {
+            while (--i >= 0)
+                sysfs_remove_group(kobj, groups[i]);
+            break;
+        }
+    }
+    return error;
+}
+
+static inline void sysfs_remove_groups(struct kobject *kobj,
+                       const struct attribute_group **groups)
+{
+    int i;
+
+    if (!groups)
+        return;
+    for (i = 0; groups[i]; i++)
+        sysfs_remove_group(kobj, groups[i]);
+}
+#endif /* LINUX_VERSION_CODE<KERNEL_VERSION(3,16,0) */
 
 static
 int version[3] = {1, 0, 7};
