@@ -1,0 +1,11 @@
+*.o
+*.ko
+*.cmd
+*.mod
+*.mod.c
+/.config
+Module.symvers
+modules.order
+/amc_pico_version.h
+/gen_py
+/test/picodefs.py
