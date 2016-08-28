@@ -1,0 +1,2 @@
+SUBSYSTEMS=="pci", ATTRS{vendor}=="0x10ee", ATTRS{device}=="0x0007", ATTRS{subsystem_vendor}=="0xcae2", ATTRS{subsystem_device}=="0x71c0", MODE="0666"
+

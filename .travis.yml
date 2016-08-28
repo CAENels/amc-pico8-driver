@@ -1,0 +1,21 @@
+sudo: required
+dist: trusty
+language: c
+compiler:
+  - gcc
+env:
+  - KSER=3.x KVER=3.2.1
+  - KSER=3.x KVER=3.16.1
+  - KSER=4.x KVER=4.6.4
+  - KSER=3.x KVER=3.2.1 FRIB=YES
+  - KSER=3.x KVER=3.16.1 FRIB=YES
+  - KSER=4.x KVER=4.6.4 FRIB=YES
+install:
+  - install -d $HOME/linux
+  - curl -s https://cdn.kernel.org/pub/linux/kernel/v$KSER/linux-$KVER.tar.xz | tar -C $HOME/linux --strip-components=1 -xJ
+  - make -C $HOME/linux defconfig
+  - make -C $HOME/linux modules_prepare
+script:
+  - if [ "$FRIB" = YES ] ; then cp config.example .config; fi
+  - if [ "$FRIB" != YES ] ; then cp config.bare .config; fi
+  - make KERNELDIR=$HOME/linux

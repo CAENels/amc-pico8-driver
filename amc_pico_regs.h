@@ -5,6 +5,8 @@
  *
  *  Jan Marjanovic <j.marjanovic@caenels.com>
  *
+ *  Copyright 2016 Board of Trustees of Michigan State University
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License v2 as published by
  * the Free Software Foundation.
@@ -26,7 +28,6 @@
 #ifndef AMC_PICO_REGS_H_
 #define AMC_PICO_REGS_H_
 
-
 #define AMC_PICO_SUBVENDOR_ID	(0xCAE2)
 #define AMC_PICO_SUBDEVICE_ID	(0x71C0)
 
@@ -34,7 +35,8 @@
 #define PICO_ADDR	(0x0)
 #define DMA_ADDR	(0x10000)
 #define MUX_ADDR	(0x20000)
-
+#define USER_ADDR   (0x30000)
+#define INTR_ADDR	(0x40000)
 
 /* on DMA_ADDR */
 #define DMA_OFFSET_STATUS	(0x0)
@@ -58,6 +60,7 @@
 
 #define PICO_CLK_FREQ		(300000000)
 #define PICO_CONV_MAX		(2048)
+#define PICO_ADC_MAX_FREQ	(1000000)
 
 #define TRG_CTRL_CH_SHIFT	(8)
 
@@ -74,5 +77,42 @@
 #define DMA_CMD_MASK_DMA_GO	(0x80000000)
 #define DMA_CMD_MASK_GEN_IRQ	(0x08000000)
 
+/* on INTR */
+/* Introduced in FW version 0x0001000b */
+/* constant 0x157C5721 */
+#define INTR_ID (INTR_ADDR+0x0)
+#define INTR_STATUS (INTR_ADDR+0x4)
+/* bit indicating whether device think MSI is enabld */
+#define INTR_STATUS_MSI_EN (1<<8)
+/* bit indicating whether an interrupt is latched (INTR_LATCH is non-zero) */
+#define INTR_STATUS_ACT    (1<<0)
+/* unused #define INTR_CONTROL (INTR_ADDR+0x8) */
+/* bit mask of all interrupt sources */
+#define INTR_LATCH (INTR_ADDR+0xc)
+/* bit mask.  write to clear per interrupt source */
+#define INTR_CLEAR (INTR_ADDR+0x10)
+/* bit mask.  write to un-mask per interrupt source */
+#define INTR_ENABLE (INTR_ADDR+0x14)
+
+/* mask for both INTR_LATCH and INTR_CLEAR.
+ * HW impliments 8 bits.
+ */
+#define INTR_DMA_DONE 0x1
+#define INTR_USER 0x2
+#define INTR_MASK (INTR_DMA_DONE|INTR_USER)
+
+/** Registers specific to FRIB local firmware.
+ */
+#ifdef CONFIG_AMC_PICO_FRIB
+
+#define FRIB_CAP_FIRST (USER_ADDR+0x100)
+#define FRIB_CAP_LAST  (USER_ADDR+0x1AC)
+
+#define USER_ID (USER_ADDR+0)
+#define USER_STATUS (USER_ADDR+0x4)
+#define USER_CONTROL (USER_ADDR+0x8)
+
+#define FRIB_VERSION  (USER_ADDR+4*0x10)
+#endif /* CONFIG_AMC_PICO_FRIB */
 
 #endif /* AMC_PICO_REGS_H_ */

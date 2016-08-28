@@ -1,0 +1,17 @@
+# Copy this as .config
+# and edit as appropriate
+#
+# A manual process as Kconfig doesn't work for out-of-tree
+# kernel modules
+
+## Enable extra debugging.
+## Not needed for kernels with CONFIG_DYNAMIC_DEBUG
+# CONFIG_AMC_PICO_DEBUG is not set
+
+## Include support for FRIB firmware customizations
+##  to use must add "site=frib" to insmod/modprobe
+# CONFIG_AMC_PICO_FRIB is not set
+
+## Set to string name of site mods to
+## enable by default.
+#CONFIG_AMC_PICO_SITE_DEFAULT is not set
