@@ -3,23 +3,16 @@
 
 ''' Tests AMC-Pico8 driver functionality '''
 
+import argparse
 import fcntl
 import struct
 import numpy as np
 import os
 
+import picodefs
+
 class PicoTest(object):
     """docstring for PicoTest"""
-
-    SET_RANGE = 0x4008500b
-    GET_RANGE = 0x8008500b
-    SET_FSAMP = 0x4008500c
-    GET_FSAMP = 0x8008500c
-    GET_B_TRANS = 0x80085028
-    SET_TRG = 0x40085032
-    SET_RING_BUF = 0x4008503c
-    SET_GATE_MUX = 0x40085046
-    SET_CONV_MUX = 0x40085050
 
     def __init__(self, filename, debug=True):
         super(PicoTest, self).__init__()
@@ -36,7 +29,7 @@ class PicoTest(object):
 
     def get_range(self):
         ''' Gets picoammeter range '''
-        buf = fcntl.ioctl(self.f, self.GET_RANGE, ' ')
+        buf = fcntl.ioctl(self.f, picodefs.GET_RANGE, ' ')
         rng = struct.unpack('B', buf)[0]
         if self.debug:
             print('get_range():', '0b{0:08b}'.format(rng))
@@ -47,11 +40,11 @@ class PicoTest(object):
         if self.debug:
             print('set_range(', '0b{0:08b}'.format(rng), ')')
         buf = struct.pack('B', rng)
-        fcntl.ioctl(self.f, self.SET_RANGE, buf)
+        fcntl.ioctl(self.f, picodefs.SET_RANGE, buf)
 
     def get_fsamp(self):
         ''' Gets picoammeter sampling frequency '''
-        buf = fcntl.ioctl(self.f, self.GET_FSAMP, '    ')
+        buf = fcntl.ioctl(self.f, picodefs.GET_FSAMP, '    ')
         fsamp = struct.unpack('I', buf)[0]
         if self.debug:
             print('get_fsamp():', str(fsamp))
@@ -63,11 +56,11 @@ class PicoTest(object):
             print('set_fsamp(', str(fsamp), ')')
 
         buf = struct.pack('I', int(fsamp))
-        fcntl.ioctl(self.f, self.SET_FSAMP, buf)
+        fcntl.ioctl(self.f, picodefs.SET_FSAMP, buf)
 
     def get_b_trans(self):
         ''' Gets number of bytes transfered in previous read() '''
-        buf = fcntl.ioctl(self.f, self.GET_B_TRANS, '    ')
+        buf = fcntl.ioctl(self.f, picodefs.GET_B_TRANS, '    ')
         b_trans = struct.unpack('I', buf)[0]
         if self.debug:
             print('get_b_trans():', str(b_trans))
@@ -88,7 +81,7 @@ class PicoTest(object):
         else:
             buf += struct.pack('I', _MODE.index(mode))
 
-        fcntl.ioctl(self.f, self.SET_TRG, buf)
+        fcntl.ioctl(self.f, picodefs.SET_TRG, buf)
 
     def set_ring_buf(self, nr_samp):
         ''' Sets number of bytes in ring buffer (pre-trigger condition) '''
@@ -96,7 +89,7 @@ class PicoTest(object):
             print('set_ring_buf(', str(nr_samp), ')')
 
         buf = struct.pack('I', nr_samp)
-        fcntl.ioctl(self.f, self.SET_RING_BUF, buf)
+        fcntl.ioctl(self.f, picodefs.SET_RING_BUF, buf)
 
     def set_gate_mux(self, sel):
         ''' Sets gate mux '''
@@ -104,7 +97,7 @@ class PicoTest(object):
             print('set_gate_mux(', str(sel), ')')
 
         buf = struct.pack('I', sel)
-        fcntl.ioctl(self.f, self.SET_GATE_MUX, buf)
+        fcntl.ioctl(self.f, picodefs.SET_GATE_MUX, buf)
 
     def set_conv_mux(self, sel):
         ''' Sets convert mux '''
@@ -112,7 +105,7 @@ class PicoTest(object):
             print('set_conv_mux(', str(sel), ')')
 
         buf = struct.pack('I', sel)
-        fcntl.ioctl(self.f, self.SET_CONV_MUX, buf)
+        fcntl.ioctl(self.f, picodefs.SET_CONV_MUX, buf)
 
     def read(self, nr_samp, print_data=True):
         ''' Reads picoammeter data'''
@@ -132,7 +125,12 @@ class PicoTest(object):
 def main():
     ''' Performs AMC-Pico8 driver test '''
 
-    pico_test = PicoTest('/dev/amc_pico')
+    parser = argparse.ArgumentParser(description='Performs tests on AMC-Pico8 driver')
+    parser.add_argument('--filename', dest='file', action='store')
+
+    args = parser.parse_args()
+
+    pico_test = PicoTest(args.file)
     pico_test.get_range()
     pico_test.set_range(0b1110000)
     pico_test.get_range()
