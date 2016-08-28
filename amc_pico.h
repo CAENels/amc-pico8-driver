@@ -58,7 +58,7 @@ struct __attribute__((__packed__)) trg_ctrl {
  @endcode
  */
 #define GET_VERSION	_IOR(AMC_PICO_MAGIC, 10, uint32_t)
-#define GET_VERSION_CURRENT 2
+#define GET_VERSION_CURRENT 3
 
 /** Sets the picoammeter range, each bit sets the individual channel,
  * RNG0 is the higher current range

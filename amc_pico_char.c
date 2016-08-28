@@ -261,6 +261,8 @@ long char_ioctl(
          *  1 - Added GET_VERSION and ABORT_READ
          *  2 - Added GET_SITE_ID, GET_SITE_VERSION, SET_SITE_MODE.
          *      Changed all others.
+         *  3 - Changed GET_FSAMP and SET_FSAMP to use frequency as
+         *      a parameter
          */
         return put_user(GET_VERSION_CURRENT, (uint32_t*)arg);
     case GET_SITE_ID:
