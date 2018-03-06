@@ -3,7 +3,23 @@ Build
 
 ```sh
 cp config.example .config
+make gen_py
+make test/picodefs.py
 make
+```
+
+Installation
+============
+
+* to install and load the driver:
+```sh
+sudo make install
+```
+
+* to uninstall:
+```sh
+sudo make uninstall
+make clean
 ```
 
 Build time configuration
