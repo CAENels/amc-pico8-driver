@@ -29,12 +29,17 @@
 #define AMC_PICO_CHAR_H_
 
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
 #include <linux/pci.h>
 #include <linux/sched.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0) // this is for the copy_to_user()
+    #include <linux/uaccess.h>
+#else
+    #include <asm/uaccess.h>
+#endif
 
 #include "amc_pico_internal.h"
 #include "amc_pico_regs.h"

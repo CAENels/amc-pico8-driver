@@ -154,20 +154,36 @@ MODULE_DEVICE_TABLE(pci, ids);
 static
 void calib_cycles(uint64_t *cycles, uint64_t *nano)
 {
-    struct timespec tA, tB;
-    cycles_t cA, cB;
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,20,0)
+        uint64_t tA, tB;
+        cycles_t cA, cB;
 
-    tA = current_kernel_time();
-    cA = get_cycles();
+        tA = ktime_get_real_fast_ns();
+        cA = get_cycles();
 
-    msleep(10);
+        msleep(10);
 
-    tB = current_kernel_time();
-    cB = get_cycles();
+        tB = ktime_get_real_fast_ns();
+        cB = get_cycles();
 
-    *cycles = cB-cA;
-    tA = timespec_sub(tB, tA);
-    *nano = timespec_to_ns(&tA);
+        *cycles = cB-cA;
+        *nano = tB - tA;
+    #else
+        struct timespec tA, tB;
+        cycles_t cA, cB;
+
+        tA = current_kernel_time();
+        cA = get_cycles();
+
+        msleep(10);
+
+        tB = current_kernel_time();
+        cB = get_cycles();
+
+        *cycles = cB-cA;
+        tA = timespec_sub(tB, tA);
+        *nano = timespec_to_ns(&tA);
+    #endif
 }
 
 irqreturn_t amc_isr(int irq, void *dev_id)
@@ -283,10 +299,17 @@ irqreturn_t amc_isr(int irq, void *dev_id)
     {
         cycles_t tdelta = get_cycles()-tstart;
 
-        ACCESS_ONCE(board->last_isr) = tdelta;
-        if(tdelta>ACCESS_ONCE(board->longest_isr)) {
-            ACCESS_ONCE(board->longest_isr) = tdelta;
-        }
+        #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+            WRITE_ONCE(board->last_isr, tdelta);
+            if(tdelta>READ_ONCE(board->longest_isr)) {
+                WRITE_ONCE(board->longest_isr, tdelta);
+            }
+        #else
+            ACCESS_ONCE(board->last_isr) = tdelta;
+            if(tdelta>ACCESS_ONCE(board->longest_isr)) {
+                ACCESS_ONCE(board->longest_isr) = tdelta;
+            }
+        #endif
 
         atomic_inc(&board->num_isr);
     }
@@ -411,7 +434,12 @@ ssize_t lastisr_show(struct device *dev, struct device_attribute *attr,
                      char *buf)
 {
     struct board_data *board = dev_get_drvdata(dev);
-    cycles_t value = ACCESS_ONCE(board->last_isr);
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+        cycles_t value = READ_ONCE(board->last_isr);
+    #else
+        cycles_t value = ACCESS_ONCE(board->last_isr);
+    #endif
+    
     return sprintf(buf, "%llu\n", (unsigned long long)value);
 }
 
@@ -444,7 +472,12 @@ ssize_t longestisr_store(struct device *dev, struct device_attribute *attr,
                          const char *buf, size_t count)
 {
     struct board_data *board = dev_get_drvdata(dev);
-    ACCESS_ONCE(board->longest_isr) = 0;
+    
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+        WRITE_ONCE(board->longest_isr, 0);
+    #else
+        ACCESS_ONCE(board->longest_isr) = 0;
+    #endif
     return count;
 }
 
@@ -453,7 +486,12 @@ ssize_t longestisr_show(struct device *dev, struct device_attribute *attr,
                      char *buf)
 {
     struct board_data *board = dev_get_drvdata(dev);
-    cycles_t num = ACCESS_ONCE(board->longest_isr);
+    
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,15,0)
+        cycles_t num = READ_ONCE(board->longest_isr);
+    #else
+        cycles_t num = ACCESS_ONCE(board->longest_isr);
+    #endif
     return sprintf(buf, "%lu\n", (unsigned long)num);
 }
 
@@ -581,8 +619,10 @@ static int probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	board->pci_dev = dev;
     board->irqmode = dmac_irqmode;
-    if (board->irqmode>2)
+
+    if ( board->irqmode > 2 ) {
         board->irqmode = 2;
+    }
 
 	/* store our data (like global variable) */
 	dev_set_drvdata(&dev->dev, board);

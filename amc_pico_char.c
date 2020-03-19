@@ -172,8 +172,7 @@ ssize_t char_read(
         dev_dbg(&board->pci_dev->dev, "  read(): returned from sleep\n");
 		rc = 0;
 		while (tmp_count > DMA_BUF_SIZE && rc==0) {
-			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
-					board->kernel_mem_buf[i], DMA_BUF_SIZE);
+			rc = copy_to_user(buf + DMA_BUF_SIZE*i,	board->kernel_mem_buf[i], DMA_BUF_SIZE);
 			tmp_count -= DMA_BUF_SIZE;
 			/* sometimes the DMA done interrupt comes even though nothing has been
 			 * transfered.  Fill our buffer with a test pattern so that this is more
@@ -183,8 +182,7 @@ ssize_t char_read(
 			i++;
 		}
 		if(rc==0) {
-			rc = copy_to_user(buf + DMA_BUF_SIZE*i,
-							board->kernel_mem_buf[i], tmp_count);
+			rc = copy_to_user(buf + DMA_BUF_SIZE*i, board->kernel_mem_buf[i], tmp_count);
 			memset(board->kernel_mem_buf[i], 0xf0, tmp_count);
 		}
 

@@ -26,7 +26,7 @@ clean:
 install:
 	echo "KERNEL==\"amc_pico*\", MODE=\"0666\"\n" > /etc/udev/rules.d/10-CAENels-AMC-Pico.rules
 	udevadm control --reload-rules
-	cp amc_pico.ko /lib/modules/$(shell uname -r)/extra
+	cp amc_pico.ko /lib/modules/$(shell uname -r)/extra/amc_pico.ko
 	echo amc_pico >> /etc/modules
 	depmod -a
 	modprobe amc_pico
