@@ -5,10 +5,15 @@
 #include <errno.h>
 #include "amc_pico.h"
 #include "amc_pico_version.h"
+#include "amc_pico_regs.h"
+
+#define STR1(x) #x
+#define STR(x) STR1(x)
 
 int main(int argc, char *argv[])
 {
     struct trg_ctrl trg;
+    struct user_offset offset;
     FILE *out = stdout;
 
     if(argc>1) {
@@ -28,6 +33,7 @@ int main(int argc, char *argv[])
     EMIT(GET_RANGE);
     EMIT(SET_FSAMP);
     EMIT(GET_FSAMP);
+    EMIT(SET_USER_OFFSET);
     EMIT(GET_B_TRANS);
     EMIT(SET_TRG);
     EMIT(SET_RING_BUF);
@@ -43,6 +49,11 @@ int main(int argc, char *argv[])
 
     fprintf(out,
             "import ctypes\n"
+            "class user_offset(ctypes.Structure):\n"
+            "    _pack_ = 1\n"
+            "    _fields_ = (('data', ctypes.c_uint32),\n"
+            "               ('addr', ctypes.c_uint32),\n"
+            "              )\n"
             "class trg_ctrl(ctypes.Structure):\n"
             "    _pack_ = 1\n"
             "    _fields_ = (('limit', ctypes.c_float),\n"
@@ -57,6 +68,12 @@ int main(int argc, char *argv[])
             );
 
     /* verify that struct packing is consistent */
+    fprintf(out, "assert user_offset.data.offset==%lu\n", offsetof(struct user_offset, data));
+    fprintf(out, "assert user_offset.data.size==%lu\n", sizeof(offset.data));
+
+    fprintf(out, "assert user_offset.addr.offset==%lu\n", offsetof(struct user_offset, addr));
+    fprintf(out, "assert user_offset.addr.size==%lu\n", sizeof(offset.addr));
+
     fprintf(out, "assert trg_ctrl.limit.offset==%lu\n", offsetof(struct trg_ctrl, limit));
     fprintf(out, "assert trg_ctrl.limit.size==%lu\n", sizeof(trg.limit));
 

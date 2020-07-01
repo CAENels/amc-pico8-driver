@@ -64,6 +64,10 @@
 
 #define TRG_CTRL_CH_SHIFT	(8)
 
+/* PICO SIGNAL PROCESSING */
+#define PICO_SIG_PROC       (0x100)
+#define USER_OFFSET_ADDR    (0x180)
+
 /* */
 #define MUX_TRG_MASK		(0x7)
 #define MUX_TRG_SHIFT		(0)

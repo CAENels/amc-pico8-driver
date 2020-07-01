@@ -47,6 +47,12 @@ struct __attribute__((__packed__)) trg_ctrl {
 	enum mode_t {DISABLED, POS_EDGE, NEG_EDGE, BOTH_EDGE} mode;
 };
 
+/** Structure to set user offset */
+struct __attribute__((__packed__)) user_offset {
+	uint32_t data;
+	uint32_t addr; // (rng*32 + ch)*4
+};
+
 /* Driver interface version number.
  * GET_VERSION_CURRENT is current version.
  * Initialize integer w/ zero to identify version zero interface
@@ -73,6 +79,9 @@ struct __attribute__((__packed__)) trg_ctrl {
 
 /** Gets the picoammeter sampling frequency (in Hz) */
 #define GET_FSAMP	_IOR(AMC_PICO_MAGIC, 13, uint32_t)
+
+/** Sets the picoammeter user calibration offset */
+#define SET_USER_OFFSET	_IOW(AMC_PICO_MAGIC, 14, struct user_offset)
 
 /** Gets number of bytes last DMA transfer succesfully transfered */
 #define GET_B_TRANS	_IOR(AMC_PICO_MAGIC, 40, uint32_t)

@@ -57,6 +57,19 @@ class PicoTest(object):
 
         buf = struct.pack('I', int(fsamp))
         fcntl.ioctl(self.f, picodefs.SET_FSAMP, buf)
+    
+    def set_user_offset(self, data, address):
+        ''' Sets picoammeter user calibration offset '''
+        if self.debug:
+            print('set_user_offset(', str(data), str(address), ')')
+
+        if ((addr >= 16) or (addr < 0)):
+            print('set_user_offset(', str(data), str(addr), '), wrong address')
+            return
+        buf = bytes()
+        buf += struct.pack('f', data)
+        buf += struct.pack('I', addr)
+        fcntl.ioctl(self.f, picodefs.SET_USER_OFFSET, buf)
 
     def get_b_trans(self):
         ''' Gets number of bytes transfered in previous read() '''

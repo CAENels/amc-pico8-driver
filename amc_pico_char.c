@@ -199,6 +199,7 @@ union ioctl_value {
     uint8_t u8;
     uint32_t u32;
     struct trg_ctrl trg;
+    struct user_offset offset;
 };
 
 static
@@ -249,6 +250,7 @@ long char_ioctl(
 	case SET_CONV_MUX:
 	case GET_RANGE:
 	case GET_FSAMP:
+    case SET_USER_OFFSET:
 	case GET_B_TRANS:
 	case ABORT_READ:
 		ret = 0;
@@ -326,6 +328,12 @@ long char_ioctl(
 		break;
 	}
 
+    case SET_USER_OFFSET: {
+        uint32_t address = uval.offset.addr * (0x04);
+        iowrite32(*(uint32_t *)&uval.offset.data, board->bar0 + USER_OFFSET_ADDR + address);
+        break;
+    }
+
 	case GET_B_TRANS:
         uval.u32 = board->dma_bytes_trans;
 		break;
@@ -351,6 +359,7 @@ long char_ioctl(
         uval.u32 = ioread32(board->bar0 + PICO_ADDR + TRG_OFFS_CTRL);
 		break;
     }
+
 	case SET_RING_BUF:
         iowrite32(uval.u32,
 			board->bar0 + PICO_ADDR + RING_BUFF_OFFS_DELAY);
@@ -369,6 +378,7 @@ long char_ioctl(
         uval.u32 = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
     }
+
     case SET_CONV_MUX: {
         uint32_t ctrl_tmp;
         uval.u32 &= MUX_CONV_MASK;
@@ -382,6 +392,7 @@ long char_ioctl(
         uval.u32 = ioread32(board->bar0 + PICO_ADDR + PICO_CONV_TRG);
 		break;
     }
+
 	case ABORT_READ:
         /* abort in progress DMA waiter */
         board->dma_irq_flag = 2;

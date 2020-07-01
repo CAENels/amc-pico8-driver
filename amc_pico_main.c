@@ -103,7 +103,7 @@ static inline void sysfs_remove_groups(struct kobject *kobj,
 #endif /* LINUX_VERSION_CODE<KERNEL_VERSION(3,16,0) */
 
 static
-int version[3] = {1, 1, 0};
+int version[3] = {1, 2, 1};
 
 static
 struct class *amc_pico8_class;
@@ -707,6 +707,8 @@ void print_all_ioctls(void){
 		": supported IOCTL: SET_FSAMP = 0x%08x\n", (unsigned int)SET_FSAMP);
 	printk(KERN_DEBUG MOD_NAME
 		": supported IOCTL: GET_FSAMP = 0x%08x\n", (unsigned int)GET_FSAMP);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: SET_USER_OFFSET = 0x%08x\n", (unsigned int)SET_USER_OFFSET);
 	printk(KERN_DEBUG MOD_NAME
 		": supported IOCTL: GET_B_TRANS = 0x%08x\n", (unsigned int)GET_B_TRANS);
 	printk(KERN_DEBUG MOD_NAME
@@ -791,5 +793,5 @@ module_exit(damc_fmc25_pcie_exit);
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Jan Marjanovic <j.marjanovic@caenels.com>");
+MODULE_AUTHOR("Paolo Scarbolo <p.scarbolo@caenels.com>");
 MODULE_DESCRIPTION(DRV_NAME);
