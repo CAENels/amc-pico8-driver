@@ -81,6 +81,17 @@
 #define DMA_CMD_MASK_DMA_GO	(0x80000000)
 #define DMA_CMD_MASK_GEN_IRQ	(0x08000000)
 
+/* EEPROM REGISTERS */
+#define EEPROM_STATUS           (0x0)
+#define EEPROM_CTRL             (0x4)
+#define EEPROM_ADDR             (0x8)
+#define EEPROM_WRITE            (0xC)
+#define EEPROM_READ             (0x10)
+#define FMC_TOP_EEPROM_ADDR     (0x300)
+#define FMC_BOT_EEPROM_ADDR     (0x200)
+#define EEPROM_USER_ADDR_START  (0x11D)
+#define EEPROM_USER_ADDR_END    (0x13C)
+
 /* on INTR */
 /* Introduced in FW version 0x0001000b */
 /* constant 0x157C5721 */

@@ -123,6 +123,11 @@ SET_FSAMP
 GET_FSAMP
 SET_USER_OFFSET
 SET_TRG
+EEPROM_CLEAR_STATUS
+EEPROM_SET_CTRL
+EEPROM_SET_ADDRESS
+EEPROM_GET_DATA
+EEPROM_SET_DATA
 SET_RING_BUF
 SET_GATE_MUX
 SET_CONV_MUX
@@ -143,6 +148,20 @@ to detect and make use of custom firmware features.
 
 ABI History
 ===========
+
+version 1.2.1 -> 1.2.2
+----------------------
+* Added functions to read and write from the "Application" eeprom.
+	* EEPROM_CLEAR_STATUS
+	* EEPROM_SET_CTRL 
+	* EEPROM_SET_ADDRESS
+	* EEPROM_GET_DATA
+	* EEPROM_SET_DATA
+
+
+version 1.2.0 -> 1.2.1
+----------------------
+* Added SET_USER_OFFSET. Allows the user to set an additional offset, i.e. becomes useful to compensate for dark currents.
 
 Version 2 -> 3
 --------------

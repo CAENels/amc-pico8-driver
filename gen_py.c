@@ -35,6 +35,11 @@ int main(int argc, char *argv[])
     EMIT(GET_FSAMP);
     EMIT(SET_USER_OFFSET);
     EMIT(GET_B_TRANS);
+    EMIT(EEPROM_CLEAR_STATUS);
+    EMIT(EEPROM_SET_CTRL);
+    EMIT(EEPROM_SET_ADDRESS);
+    EMIT(EEPROM_GET_DATA);
+    EMIT(EEPROM_SET_DATA);
     EMIT(SET_TRG);
     EMIT(SET_RING_BUF);
     EMIT(SET_GATE_MUX);
@@ -46,7 +51,7 @@ int main(int argc, char *argv[])
     EMIT(GET_SITE_VERSION);
     EMIT(SET_SITE_MODE);
 #undef EMIT
-
+    fprintf(out, "EEPROM_USER_ADDR_START = %s\n", STR(EEPROM_USER_ADDR_START));
     fprintf(out,
             "import ctypes\n"
             "class user_offset(ctypes.Structure):\n"

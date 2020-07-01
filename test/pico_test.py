@@ -71,6 +71,106 @@ class PicoTest(object):
         buf += struct.pack('I', addr)
         fcntl.ioctl(self.f, picodefs.SET_USER_OFFSET, buf)
 
+    def load_eeprom_user_offset(self, rng, ch):
+        if ((rng > 1) or (rng < 0)):
+            print('set_user_offset(', str(rng), str(ch), '), wrong range')
+            return
+        if ((ch > 7) or (ch < 0)):
+            print('set_user_offset(', str(rng), str(ch), '), wrong channel')
+            return
+        if ch > 3:
+            fmc = 1 # bottom
+        else:
+            fmc = 0 # top
+        addr = ((ch % 4)*2 + rng)*0x4 + picodefs.EEPROM_USER_ADDR_START
+        
+        read_data_bytes = bytearray(4)
+        for i in range(0,4):  # for 4 bytes (one at the time, litte-endian in eeprom)
+            # set address
+            buf = bytes()
+            buf += struct.pack('I', (addr+i) & 0xFFF)
+            buf += struct.pack('I', fmc)
+            fcntl.ioctl(self.f, picodefs.EEPROM_SET_ADDRESS, buf)
+            if self.debug:
+                time.sleep(0.2)
+                # increment address
+                print(addr+i)
+            # ctrl -> read
+            buf = bytes()
+            buf += struct.pack('I', 0x3)
+            buf += struct.pack('I', fmc)
+            fcntl.ioctl(self.f, picodefs.EEPROM_SET_CTRL, buf)
+            if self.debug:
+                time.sleep(0.2)
+            # read data read
+            tmp = int(0)
+            buf = bytes()
+            buf += struct.pack('I', tmp)
+            buf += struct.pack('I', fmc)
+            read_data_bytes[i] = fcntl.ioctl(self.f, picodefs.EEPROM_GET_DATA, buf)[0]
+            if self.debug:
+                print("read byte", read_data_bytes)
+                time.sleep(0.2)
+            # clear status
+            buf = bytes()
+            buf += struct.pack('I', tmp)
+            buf += struct.pack('I', fmc)
+            buf = fcntl.ioctl(self.f, picodefs.EEPROM_CLEAR_STATUS, buf)
+            if self.debug:
+                time.sleep(0.2)
+        return struct.unpack('!f', read_data_bytes)[0]
+    
+    def save_eeprom_user_offset(self, data, rng, ch):
+        if ((rng > 1) or (rng < 0)):
+            print('set_user_offset(', str(rng), str(ch), '), wrong range')
+            return
+        if ((ch > 7) or (ch < 0)):
+            print('set_user_offset(', str(rng), str(ch), '), wrong channel')
+            return
+        if ch > 3:
+            fmc = 1 # bottom
+        else:
+            fmc = 0 # top
+        addr = ((ch % 4)*2 + rng)*0x4 + picodefs.EEPROM_USER_ADDR_START
+        
+        for i in range(0,4):  # for 4 bytes (one at the time, litte-endian in eeprom)
+            # set address
+            buf = bytes()
+            buf += struct.pack('I', (addr+i) & 0xFFF)
+            buf += struct.pack('I', fmc)
+            fcntl.ioctl(self.f, picodefs.EEPROM_SET_ADDRESS, buf)
+            if self.debug:
+                time.sleep(0.2)
+                # increment address
+                print(addr+i)
+            # set data to be written
+            write_data_bytes = struct.pack('!f', data)
+            if self.debug:
+                print(write_data_bytes)
+            write_data = write_data_bytes[i]# << 0x18   # 24 bit
+            buf = bytes()
+            buf += struct.pack('I', write_data)
+            buf += struct.pack('I', fmc)
+            buf = fcntl.ioctl(self.f, picodefs.EEPROM_SET_DATA, buf)
+            if self.debug:
+                print("write byte", write_data)
+                time.sleep(0.2)
+            # ctrl -> perform write
+            buf = bytes()
+            buf += struct.pack('I', 0x1)
+            buf += struct.pack('I', fmc)
+            fcntl.ioctl(self.f, picodefs.EEPROM_SET_CTRL, buf)
+            if self.debug:
+                time.sleep(0.2)            
+            # clear status
+            tmp = int(0)
+            buf = bytes()
+            buf += struct.pack('I', tmp)
+            buf += struct.pack('I', fmc)
+            buf = fcntl.ioctl(self.f, picodefs.EEPROM_CLEAR_STATUS, buf)
+            if self.debug:
+                time.sleep(0.2)
+
     def get_b_trans(self):
         ''' Gets number of bytes transfered in previous read() '''
         buf = fcntl.ioctl(self.f, picodefs.GET_B_TRANS, '    ')

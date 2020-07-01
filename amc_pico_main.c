@@ -103,7 +103,7 @@ static inline void sysfs_remove_groups(struct kobject *kobj,
 #endif /* LINUX_VERSION_CODE<KERNEL_VERSION(3,16,0) */
 
 static
-int version[3] = {1, 2, 1};
+int version[3] = {1, 2, 2};
 
 static
 struct class *amc_pico8_class;
@@ -711,6 +711,16 @@ void print_all_ioctls(void){
 		": supported IOCTL: SET_USER_OFFSET = 0x%08x\n", (unsigned int)SET_USER_OFFSET);
 	printk(KERN_DEBUG MOD_NAME
 		": supported IOCTL: GET_B_TRANS = 0x%08x\n", (unsigned int)GET_B_TRANS);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: EEPROM_CLEAR_STATUS = 0x%08x\n", (unsigned int)EEPROM_CLEAR_STATUS);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: EEPROM_SET_CTRL = 0x%08x\n", (unsigned int)EEPROM_SET_CTRL);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: EEPROM_SET_ADDRESS = 0x%08x\n", (unsigned int)EEPROM_SET_ADDRESS);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: EEPROM_GET_DATA = 0x%08x\n", (unsigned int)EEPROM_GET_DATA);
+    printk(KERN_DEBUG MOD_NAME
+		": supported IOCTL: EEPROM_SET_DATA = 0x%08x\n", (unsigned int)EEPROM_SET_DATA);
 	printk(KERN_DEBUG MOD_NAME
 		": supported IOCTL: SET_TRG   = 0x%08x\n", (unsigned int)SET_TRG);
 	printk(KERN_DEBUG MOD_NAME

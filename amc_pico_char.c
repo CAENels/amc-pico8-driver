@@ -251,6 +251,11 @@ long char_ioctl(
 	case GET_RANGE:
 	case GET_FSAMP:
     case SET_USER_OFFSET:
+    case EEPROM_CLEAR_STATUS:
+    case EEPROM_SET_CTRL:
+    case EEPROM_SET_ADDRESS:
+    case EEPROM_GET_DATA:
+    case EEPROM_SET_DATA:
 	case GET_B_TRANS:
 	case ABORT_READ:
 		ret = 0;
@@ -331,6 +336,83 @@ long char_ioctl(
     case SET_USER_OFFSET: {
         uint32_t address = uval.offset.addr * (0x04);
         iowrite32(*(uint32_t *)&uval.offset.data, board->bar0 + USER_OFFSET_ADDR + address);
+        break;
+    }
+
+    case EEPROM_CLEAR_STATUS: {
+        uint32_t address;
+        if (uval.offset.addr == 0) {
+            address = FMC_TOP_EEPROM_ADDR + EEPROM_STATUS;
+        } else if (uval.offset.addr == 1) {
+            address = FMC_BOT_EEPROM_ADDR + EEPROM_STATUS;
+        } else {
+            break;
+        }
+        iowrite32(0x1, board->bar0 + address);
+        break;
+    }
+
+    case EEPROM_SET_CTRL: {
+        uint32_t address;
+        if (uval.offset.addr == 0) {
+            address = FMC_TOP_EEPROM_ADDR + EEPROM_CTRL;
+        } else if (uval.offset.addr == 1) {
+            address = FMC_BOT_EEPROM_ADDR + EEPROM_CTRL;
+        } else {
+            break;
+        }
+        if ((uval.offset.data & 0x3) == 0x3) {   // READ
+            iowrite32(0x3, board->bar0 + address);
+        } else if ((uval.offset.data & 0x3) == 0x1) {  // WRITE
+            iowrite32(0x1, board->bar0 + address);
+        } else {
+            break;
+        }        
+        break;
+    }
+
+    case EEPROM_SET_ADDRESS: {
+        uint32_t address;
+        uint32_t data = *(uint32_t *)&uval.offset.data;
+        if (uval.offset.addr == 0) {
+            address = FMC_TOP_EEPROM_ADDR + EEPROM_ADDR;
+        } else if (uval.offset.addr == 1) {
+            address = FMC_BOT_EEPROM_ADDR + EEPROM_ADDR;
+        } else {
+            break;
+        }
+        data = data & 0xFFF;
+        if ((data >= EEPROM_USER_ADDR_START) && (data <= EEPROM_USER_ADDR_END)) {
+            iowrite32(data, board->bar0 + address);
+        }
+        break;
+    }
+
+    case EEPROM_GET_DATA: {
+        uint32_t address;
+        uint32_t *ptr = (uint32_t *)&uval.offset.data;
+        if (uval.offset.addr == 0) {
+            address = FMC_TOP_EEPROM_ADDR + EEPROM_READ;
+        } else if (uval.offset.addr == 1) {
+            address = FMC_BOT_EEPROM_ADDR + EEPROM_READ;
+        } else {
+            break;
+        }
+        *ptr = ioread32(board->bar0 + address) & 0xFF;
+        break;
+    }
+
+    case EEPROM_SET_DATA: {
+        uint32_t address;
+        uint32_t data = *(uint32_t *)&uval.offset.data;
+        if (uval.offset.addr == 0) {
+            address = FMC_TOP_EEPROM_ADDR + EEPROM_WRITE;
+        } else if (uval.offset.addr == 1) {
+            address = FMC_BOT_EEPROM_ADDR + EEPROM_WRITE;
+        } else {
+            break;
+        }
+        iowrite32(data & 0xFF, board->bar0 + address);
         break;
     }
 

@@ -86,6 +86,17 @@ struct __attribute__((__packed__)) user_offset {
 /** Gets number of bytes last DMA transfer succesfully transfered */
 #define GET_B_TRANS	_IOR(AMC_PICO_MAGIC, 40, uint32_t)
 
+/** Clear EEPROM STATUS bit */
+#define EEPROM_CLEAR_STATUS	_IOWR(AMC_PICO_MAGIC, 45, struct user_offset)
+/** Set EEPROM CTRL register */
+#define EEPROM_SET_CTRL		_IOWR(AMC_PICO_MAGIC, 46, struct user_offset)
+/** Set EEPROM address to read/write */
+#define EEPROM_SET_ADDRESS	_IOWR(AMC_PICO_MAGIC, 47, struct user_offset)
+/** get EEPROM data byte read */
+#define EEPROM_GET_DATA		_IOWR(AMC_PICO_MAGIC, 48, struct user_offset)
+/** Set EEPROM data byte to be written */
+#define EEPROM_SET_DATA		_IOWR(AMC_PICO_MAGIC, 49, struct user_offset)
+
 /** Sets trigger parameters */
 #define SET_TRG		_IOWR(AMC_PICO_MAGIC, 50, struct trg_ctrl)
 
