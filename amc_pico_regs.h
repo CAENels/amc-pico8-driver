@@ -89,8 +89,8 @@
 #define EEPROM_READ             (0x10)
 #define FMC_TOP_EEPROM_ADDR     (0x300)
 #define FMC_BOT_EEPROM_ADDR     (0x200)
-#define EEPROM_USER_ADDR_START  (0x11D)
-#define EEPROM_USER_ADDR_END    (0x13C)
+#define EEPROM_USER_ADDR_START  (0x121)
+#define EEPROM_USER_ADDR_END    (0x140)
 
 /* on INTR */
 /* Introduced in FW version 0x0001000b */
