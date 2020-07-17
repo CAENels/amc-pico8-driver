@@ -382,7 +382,7 @@ long char_ioctl(
             break;
         }
         data = data & 0xFFF;
-        if ((data >= EEPROM_USER_ADDR_START) && (data <= EEPROM_USER_ADDR_END)) {
+        if ((data >= (EEPROM_USER_ADDR_START - 0x4)) && (data <= EEPROM_USER_ADDR_END)) {  // 0x4 is for the user offset magic number
             iowrite32(data, board->bar0 + address);
         }
         break;

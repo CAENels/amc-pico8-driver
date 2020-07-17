@@ -103,7 +103,7 @@ static inline void sysfs_remove_groups(struct kobject *kobj,
 #endif /* LINUX_VERSION_CODE<KERNEL_VERSION(3,16,0) */
 
 static
-int version[3] = {1, 2, 2};
+int version[3] = {1, 2, 3};
 
 static
 struct class *amc_pico8_class;

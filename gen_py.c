@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
     EMIT(SET_SITE_MODE);
 #undef EMIT
     fprintf(out, "EEPROM_USER_ADDR_START = %s\n", STR(EEPROM_USER_ADDR_START));
+    fprintf(out, "MAGIC_NUMBER = %s\n", STR(MAGIC_NUMBER_USER_OFFSET));
     fprintf(out,
             "import ctypes\n"
             "class user_offset(ctypes.Structure):\n"

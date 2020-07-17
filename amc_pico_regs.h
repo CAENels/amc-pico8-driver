@@ -92,6 +92,8 @@
 #define EEPROM_USER_ADDR_START  (0x121)
 #define EEPROM_USER_ADDR_END    (0x140)
 
+#define MAGIC_NUMBER_USER_OFFSET (0x25ECA11B)
+
 /* on INTR */
 /* Introduced in FW version 0x0001000b */
 /* constant 0x157C5721 */
